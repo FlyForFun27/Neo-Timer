@@ -1,25 +1,28 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
-// --- THE FIX: REGEX TIME PARSER ---
-// This grabs the numbers directly, making it impossible to duplicate the hours into minutes.
-function timeStrToSeconds(timeStr) {
-    if (!timeStr) return 0;
-    const matches = timeStr.match(/\d+/g); 
-    if (!matches || matches.length < 2) return 0;
-    
-    const h = parseInt(matches, 10);
-    const m = parseInt(matches, 10);
-    const s = matches ? parseInt(matches, 10) : 0;
-    
-    return (h * 3600) + (m * 60) + s;
+// SET TO 'true' IF YOUR SHEET TIMES ARE SERVER TIME (UTC)
+// SET TO 'false' IF YOUR SHEET TIMES ARE YOUR LOCAL TIME
+const USE_UTC_TIME = false; 
+
+// --- ORIGINAL PARSING HELPER ---
+function parseTimeStr(timeStr) {
+    if (!timeStr) return { h: 0, m: 0, s: 0 };
+    const parts = timeStr.split(':');
+    return {
+        h: parseInt(parts, 10) || 0,
+        m: parseInt(parts, 10) || 0,
+        s: parts ? parseInt(parts, 10) : 0
+    };
 }
 
-function formatDurationSeconds(totalSeconds) {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    if (h > 0) return `${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
-    return `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
+// --- ORIGINAL FORMATTER ---
+function formatDuration(ms) {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return h > 0 
+        ? `${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s` 
+        : `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -68,33 +71,39 @@ function updateTopClock() {
 
 function updateResetTimers() {
     const now = new Date();
-    const currentSeconds = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
-    const resetSeconds = 6 * 3600; 
+    const dailyReset = new Date();
+    const weeklyReset = new Date();
 
-    let diffDaily = resetSeconds - currentSeconds;
-    if (diffDaily < 0) diffDaily += 86400; 
-    
-    const dH = Math.floor(diffDaily / 3600);
-    const dM = Math.floor((diffDaily % 3600) / 60);
-    const dS = diffDaily % 60;
-    document.getElementById('daily-reset').innerText = `${dH}h ${dM.toString().padStart(2, '0')}m ${dS.toString().padStart(2, '0')}s`;
-
-    let weeklyTargetDate = new Date();
-    weeklyTargetDate.setHours(6, 0, 0, 0);
-    let currentDay = now.getDay();
-    
-    if (currentDay === 3 && now.getHours() >= 6) {
-        weeklyTargetDate.setDate(weeklyTargetDate.getDate() + 7);
+    if (USE_UTC_TIME) {
+        dailyReset.setUTCHours(6, 0, 0, 0);
+        weeklyReset.setUTCHours(6, 0, 0, 0);
     } else {
-        weeklyTargetDate.setDate(weeklyTargetDate.getDate() + ((3 - currentDay + 7) % 7));
+        dailyReset.setHours(6, 0, 0, 0);
+        weeklyReset.setHours(6, 0, 0, 0);
     }
     
-    let wDiffSec = Math.floor((weeklyTargetDate.getTime() - now.getTime()) / 1000);
-    const wD = Math.floor(wDiffSec / 86400);
-    const wH = Math.floor((wDiffSec % 86400) / 3600);
-    const wM = Math.floor((wDiffSec % 3600) / 60);
-    const wS = wDiffSec % 60;
+    // Daily Math
+    if (now >= dailyReset) {
+        dailyReset.setDate(dailyReset.getDate() + 1);
+    }
+    const dDiff = dailyReset - now;
+    const dH = Math.floor(dDiff / 3600000);
+    const dM = Math.floor((dDiff % 3600000) / 60000);
+    const dS = Math.floor((dDiff % 60000) / 1000);
+    document.getElementById('daily-reset').innerText = `${dH}h ${dM.toString().padStart(2, '0')}m ${dS.toString().padStart(2, '0')}s`;
+
+    // Weekly Math (Wednesday)
+    let daysUntilWed = (3 - weeklyReset.getDay() + 7) % 7;
+    if (daysUntilWed === 0 && now >= weeklyReset) {
+        daysUntilWed = 7;
+    }
+    weeklyReset.setDate(weeklyReset.getDate() + daysUntilWed);
     
+    const wDiff = weeklyReset - now;
+    const wD = Math.floor(wDiff / 86400000);
+    const wH = Math.floor((wDiff % 86400000) / 3600000);
+    const wM = Math.floor((wDiff % 3600000) / 60000);
+    const wS = Math.floor((wDiff % 60000) / 1000);
     const daysStr = wD > 0 ? `${wD}d ` : '';
     document.getElementById('weekly-reset').innerText = `${daysStr}${wH}h ${wM.toString().padStart(2, '0')}m ${wS.toString().padStart(2, '0')}s`;
 }
@@ -132,9 +141,7 @@ function buildDashboard(data) {
                 card.innerHTML = `
                     <p class="boss-name">${boss.BossName}</p>
                     <p class="boss-time">Time: ${displayTime}</p>
-                    <div class="countdown-wrapper">
-                        <div class="countdown" data-time="${fullTime}">--</div>
-                    </div>`;
+                    <div class="countdown-wrapper"><div class="countdown" data-time="${fullTime}">--</div></div>`;
             }
             container.appendChild(card);
         });
@@ -165,8 +172,6 @@ function buildDashboard(data) {
 
 function updateTimers() {
     const now = new Date(); 
-    const currentSeconds = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
-
     const timerToggleEl = document.getElementById('timer-toggle');
     const isTimerOn = timerToggleEl ? timerToggleEl.checked : true;
 
@@ -175,21 +180,34 @@ function updateTimers() {
         const countdownEl = card.querySelector('.countdown');
         const targetTimeStr = card.dataset.target;
         
-        const targetSeconds = timeStrToSeconds(targetTimeStr);
+        const t = parseTimeStr(targetTimeStr);
+        const targetDate = new Date();
+        
+        if (USE_UTC_TIME) {
+            targetDate.setUTCHours(t.h, t.m, t.s, 0);
+        } else {
+            targetDate.setHours(t.h, t.m, t.s, 0);
+        }
 
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
 
         if (isMonarch) {
             const killTimerEl = card.querySelector('.kill-timer');
-            let diffKill = currentSeconds - targetSeconds;
-            if (diffKill < 0) diffKill += 86400; 
+            let diffKill = now - targetDate;
             
-            killTimerEl.innerText = formatDurationSeconds(diffKill);
-            let remainingUntilSpawn = 9000 - diffKill;
+            // If the kill target was earlier today (or yesterday), prevent negative numbers
+            if (diffKill < 0) {
+                diffKill = 0;
+            }
+            
+            killTimerEl.innerText = formatDuration(diffKill);
 
-            if (remainingUntilSpawn > 0) {
-                countdownEl.innerText = formatDurationSeconds(remainingUntilSpawn);
+            const spawnDate = new Date(targetDate.getTime() + (2.5 * 3600000));
+            const diffSpawn = spawnDate - now;
+
+            if (diffSpawn > 0) {
+                countdownEl.innerText = formatDuration(diffSpawn);
                 card.dataset.priority = "1"; 
             } else {
                 countdownEl.innerText = `In Window`;
@@ -197,16 +215,14 @@ function updateTimers() {
                 card.dataset.priority = "0"; 
             }
         } else {
-            let diff = targetSeconds - currentSeconds;
-            if (diff < -43200) diff += 86400; 
-
+            const diffMs = targetDate - now;
             const displayTimeStr = targetTimeStr.length >= 5 ? targetTimeStr.substring(0, 5) : targetTimeStr;
 
-            if (diff > 0) {
-                countdownEl.innerText = isTimerOn ? formatDurationSeconds(diff) : `Announcement at: ${displayTimeStr}`;
+            if (diffMs > 0) {
+                countdownEl.innerText = isTimerOn ? formatDuration(diffMs) : `Announcement at: ${displayTimeStr}`;
                 card.dataset.priority = "1"; 
-            } else if (diff <= 0 && diff > -300) { 
-                countdownEl.innerText = `Spawning in: ${formatDurationSeconds(300 + diff)}`;
+            } else if (diffMs <= 0 && diffMs > -300000) { 
+                countdownEl.innerText = `Spawning in: ${formatDuration(300000 + diffMs)}`;
                 countdownEl.classList.add('spawning');
                 card.dataset.priority = "0"; 
             } else {
