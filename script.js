@@ -1,41 +1,53 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Color Picker Logic
-    const colorDots = document.querySelectorAll('.color-dot');
-    colorDots.forEach(dot => {
+    // LocalStorage: Load saved settings
+    const savedColor = localStorage.getItem('neoTimerThemeColor');
+    if (savedColor) document.documentElement.style.setProperty('--accent-color', savedColor);
+
+    const timerToggle = document.getElementById('timer-toggle');
+    const savedToggle = localStorage.getItem('neoTimerToggleState');
+    if (timerToggle) {
+        if (savedToggle !== null) timerToggle.checked = savedToggle === 'true';
+        timerToggle.addEventListener('change', (e) => {
+            localStorage.setItem('neoTimerToggleState', e.target.checked);
+            updateTimers();
+        });
+    }
+
+    // Color Picker Event
+    document.querySelectorAll('.color-dot').forEach(dot => {
         dot.addEventListener('click', (e) => {
             const selectedColor = e.target.getAttribute('data-color');
             document.documentElement.style.setProperty('--accent-color', selectedColor);
+            localStorage.setItem('neoTimerThemeColor', selectedColor);
         });
     });
-
-    const timerToggle = document.getElementById('timer-toggle');
-    if (timerToggle) { 
-        timerToggle.addEventListener('change', updateTimers); 
-    }
 
     // Fetch CSV Data
     Papa.parse(sheetUrl, {
         download: true,
         header: true,
         skipEmptyLines: true,
+        dynamicTyping: true, // Forces TargetSec to be a number
         complete: function(results) {
             buildDashboard(results.data);
-            setInterval(updateTimers, 1000);
-            updateTimers(); 
+            setInterval(tick, 1000);
+            tick(); 
         }
     });
-
-    setInterval(updateTopClock, 1000);
-    updateTopClock();
 });
+
+function tick() {
+    updateTopClock();
+    updateTimers();
+}
 
 function updateTopClock() {
     const now = new Date();
     document.getElementById('top-clock').innerText = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     
-    // Also update Resets here
+    // Master Seconds Tracker (0 to 86400)
     const nowSec = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
     
     // Daily Reset (6:00 AM = 21600s)
@@ -61,7 +73,6 @@ function buildDashboard(data) {
     grid.innerHTML = ''; 
     const today = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(new Date());
     
-    // Use the case-sensitive headers you provided
     const todaysData = data.filter(row => row.Weekday === today);
     const activeRegions = [...new Set(todaysData.map(row => row.Region))];
 
@@ -73,36 +84,22 @@ function buildDashboard(data) {
         const container = col.querySelector('.card-container');
         const regionBosses = todaysData.filter(row => row.Region === region);
         
+        // Build Individual Cards
         regionBosses.forEach(boss => {
             const card = document.createElement('div');
             card.className = 'boss-card';
-            
-            // MAP RAW SECONDS AND STRINGS TO DATASETS
             card.dataset.targetSec = boss.TargetSec; 
             card.dataset.targetTime = boss.TargetTime;
 
             if (region.toLowerCase() === 'monarch') {
-                
-                // 1. Find all occurrences of this boss across the whole week/all channels
-                const fullSchedule = data
-                    .filter(row => row.BossName === boss.BossName)
-                    .map(row => `<div class="schedule-row"><span>${row.Weekday} (${row.Region})</span> <span>${row.TargetTime}</span></div>`)
-                    .join('');
-                
-            card.classList.add('monarch-card');
-            card.innerHTML = `
-                <p class="boss-name">${boss.BossName}</p>
-                <p class="time-since-kill">Time since kill: <span class="kill-timer">--</span></p>
-                <div class="countdown-wrapper">
-                    <div class="estimated-label">ESTIMATED SPAWN IN</div>
-                    <div class="countdown">--</div>
-                </div>
-                <div class="monarch-details">
-                    <button class="schedule-toggle" onclick="toggleSchedule(this)">View Full Schedule ▼</button>
-                    <div class="schedule-content">
-                        ${fullSchedule}
-                    </div>
-                </div>`;
+                card.classList.add('monarch-card');
+                card.innerHTML = `
+                    <p class="boss-name">${boss.BossName}</p>
+                    <p class="time-since-kill">Time since kill: <span class="kill-timer">--</span></p>
+                    <div class="countdown-wrapper">
+                        <div class="estimated-label">ESTIMATED SPAWN IN</div>
+                        <div class="countdown">--</div>
+                    </div>`;
             } else {
                 card.innerHTML = `
                     <p class="boss-name">${boss.BossName}</p>
@@ -111,13 +108,40 @@ function buildDashboard(data) {
             }
             container.appendChild(card);
         });
+
+        // Generate the global Dropdown for the Monarch column
+        if (region.toLowerCase() === 'monarch') {
+            const dropdown = document.createElement('details');
+            dropdown.className = 'monarch-dropdown';
+            
+            const allMonarchs = data.filter(row => row.Region && row.Region.toLowerCase() === 'monarch');
+            const dayOrder = { "Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6, "Sunday":7 };
+            
+            allMonarchs.sort((a, b) => {
+                if (dayOrder[a.Weekday] !== dayOrder[b.Weekday]) return dayOrder[a.Weekday] - dayOrder[b.Weekday];
+                return a.TargetSec - b.TargetSec;
+            });
+
+            let listHTML = '';
+            allMonarchs.forEach(row => {
+                listHTML += `<div class="schedule-row"><span>${row.Weekday}, ${row.BossName}</span> <span>${row.TargetTime}</span></div>`;
+            });
+
+            dropdown.innerHTML = `
+                <summary>View All Logged Times</summary>
+                <div class="schedule-list">
+                    ${listHTML}
+                </div>
+            `;
+            col.appendChild(dropdown);
+        }
+
         grid.appendChild(col);
     });
 }
 
 function updateTimers() {
     const now = new Date(); 
-    // TRICK: Convert current time to raw seconds for pure math subtraction
     const nowSec = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
     
     const timerToggle = document.getElementById('timer-toggle');
@@ -135,13 +159,12 @@ function updateTimers() {
 
         if (isMonarch) {
             const killTimerEl = card.querySelector('.kill-timer');
-            // Monarch logic: 2.5 hours = 9000 seconds
             let timeSinceKill = nowSec - targetSec;
             if (timeSinceKill < 0) timeSinceKill += 86400; // Cross-day fix
             
             if (killTimerEl) killTimerEl.innerText = formatDuration(timeSinceKill * 1000);
             
-            const spawnIn = 9000 - timeSinceKill;
+            const spawnIn = 9000 - timeSinceKill; // 9000s = 2.5h
             if (spawnIn > 0) {
                 countdownEl.innerText = formatDuration(spawnIn * 1000);
                 card.dataset.priority = "1";
@@ -151,11 +174,11 @@ function updateTimers() {
                 card.dataset.priority = "0";
             }
         } else {
-            // Standard Boss Logic (Subtracting Integers)
+            // Raw Math Subtraction
             if (diffSec > 0) {
                 countdownEl.innerText = isTimerOn ? formatDuration(diffSec * 1000) : `Announcement at: ${card.dataset.targetTime}`;
                 card.dataset.priority = "1";
-            } else if (diffSec <= 0 && diffSec > -300) { // 300s = 5 min window
+            } else if (diffSec <= 0 && diffSec > -300) { 
                 countdownEl.innerText = `Spawning in: ${formatDuration((300 + diffSec) * 1000)}`;
                 countdownEl.classList.add('spawning');
                 card.dataset.priority = "0";
@@ -167,7 +190,7 @@ function updateTimers() {
         }
     });
 
-    // --- SORTING LOGIC ---
+    // Sort to keep priority items on top
     document.querySelectorAll('.card-container').forEach(container => {
         const cards = Array.from(container.children);
         cards.sort((a, b) => {
