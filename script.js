@@ -1,8 +1,6 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
 // --- PURE MATH TIME PARSER ---
-// Completely bypasses the buggy JS Date object. 
-// Converts "08:36" directly into total seconds.
 function timeStrToSeconds(timeStr) {
     if (!timeStr) return 0;
     const parts = timeStr.split(':');
@@ -12,19 +10,15 @@ function timeStrToSeconds(timeStr) {
     return (h * 3600) + (m * 60) + s;
 }
 
-// Converts seconds back to "Xh Xm Xs"
 function formatDurationSeconds(totalSeconds) {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
-    if (h > 0) {
-        return `${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
-    }
+    if (h > 0) return `${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
     return `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Load Preferences
     const savedColor = localStorage.getItem('neoTimerThemeColor');
     if (savedColor) document.documentElement.style.setProperty('--accent-color', savedColor);
 
@@ -38,7 +32,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Color Picker
     document.querySelectorAll('.color-dot').forEach(dot => {
         dot.addEventListener('click', (e) => {
             const selectedColor = e.target.getAttribute('data-color');
@@ -47,7 +40,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // Fetch Data
     Papa.parse(sheetUrl, {
         download: true,
         header: true,
@@ -59,7 +51,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Start Header Clocks
     setInterval(updateTopClock, 1000);
     setInterval(updateResetTimers, 1000);
     updateTopClock();
@@ -74,23 +65,20 @@ function updateTopClock() {
 function updateResetTimers() {
     const now = new Date();
     const currentSeconds = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
-    const resetSeconds = 6 * 3600; // 6:00 AM in seconds
+    const resetSeconds = 6 * 3600; 
 
-    // Daily Math
     let diffDaily = resetSeconds - currentSeconds;
-    if (diffDaily < 0) diffDaily += 86400; // If past 6 AM, add 24 hours for tomorrow
+    if (diffDaily < 0) diffDaily += 86400; 
     
     const dH = Math.floor(diffDaily / 3600);
     const dM = Math.floor((diffDaily % 3600) / 60);
     const dS = diffDaily % 60;
     document.getElementById('daily-reset').innerText = `${dH}h ${dM.toString().padStart(2, '0')}m ${dS.toString().padStart(2, '0')}s`;
 
-    // Weekly Math (Wednesday 6 AM)
     let weeklyTargetDate = new Date();
     weeklyTargetDate.setHours(6, 0, 0, 0);
     let currentDay = now.getDay();
     
-    // If today is Wed (3) and it's past 6 AM, target NEXT Wed. Otherwise, calculate days to Wed.
     if (currentDay === 3 && now.getHours() >= 6) {
         weeklyTargetDate.setDate(weeklyTargetDate.getDate() + 7);
     } else {
@@ -135,17 +123,20 @@ function buildDashboard(data) {
                     <div class="countdown-wrapper">
                         <div class="estimated-label">ESTIMATED SPAWN IN</div>
                         <div class="countdown" data-time="${fullTime}">--</div>
+                        <div class="math-debug" style="font-size:10px; color:var(--text-muted); margin-top:4px;"></div>
                     </div>`;
             } else {
                 card.innerHTML = `
                     <p class="boss-name">${boss.BossName}</p>
                     <p class="boss-time">Time: ${displayTime}</p>
-                    <div class="countdown-wrapper"><div class="countdown" data-time="${fullTime}">--</div></div>`;
+                    <div class="countdown-wrapper">
+                        <div class="countdown" data-time="${fullTime}">--</div>
+                        <div class="math-debug" style="font-size:10px; color:var(--text-muted); margin-top:4px;"></div>
+                    </div>`;
             }
             container.appendChild(card);
         });
 
-        // Monarch Dropdown
         if (region.toLowerCase() === 'monarch') {
             const details = document.createElement('details');
             details.className = 'monarch-dropdown';
@@ -172,7 +163,9 @@ function buildDashboard(data) {
 
 function updateTimers() {
     const now = new Date(); 
-    // Get current time in pure seconds
+    // Format device time exactly as it is checking it
+    const deviceH = now.getHours().toString().padStart(2, '0');
+    const deviceM = now.getMinutes().toString().padStart(2, '0');
     const currentSeconds = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
 
     const timerToggleEl = document.getElementById('timer-toggle');
@@ -181,24 +174,27 @@ function updateTimers() {
     document.querySelectorAll('.boss-card').forEach(card => {
         const isMonarch = card.classList.contains('monarch-card');
         const countdownEl = card.querySelector('.countdown');
+        const debugEl = card.querySelector('.math-debug');
         const targetTimeStr = card.dataset.target;
         
-        // Target time in pure seconds
         const targetSeconds = timeStrToSeconds(targetTimeStr);
+        const parsedH = Math.floor(targetSeconds / 3600).toString().padStart(2, '0');
+        const parsedM = Math.floor((targetSeconds % 3600) / 60).toString().padStart(2, '0');
 
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
 
+        // DIAGNOSTIC PRINTOUT - This will tell us exactly where the math is failing
+        if (debugEl) {
+            debugEl.innerText = `Device: ${deviceH}:${deviceM} | Parsed: ${parsedH}:${parsedM}`;
+        }
+
         if (isMonarch) {
             const killTimerEl = card.querySelector('.kill-timer');
-            
-            // Math: How long ago was it killed?
             let diffKill = currentSeconds - targetSeconds;
-            if (diffKill < 0) diffKill += 86400; // Accounts for midnight crossover
+            if (diffKill < 0) diffKill += 86400; 
             
             killTimerEl.innerText = formatDurationSeconds(diffKill);
-
-            // Math: Spawn happens exactly 9000 seconds (2.5 hours) after kill
             let remainingUntilSpawn = 9000 - diffKill;
 
             if (remainingUntilSpawn > 0) {
@@ -210,9 +206,8 @@ function updateTimers() {
                 card.dataset.priority = "0"; 
             }
         } else {
-            // Normal Boss Math
             let diff = targetSeconds - currentSeconds;
-            if (diff < -43200) diff += 86400; // If target is early AM but current is late PM, add 24hrs
+            if (diff < -43200) diff += 86400; 
 
             const displayTimeStr = targetTimeStr.length >= 5 ? targetTimeStr.substring(0, 5) : targetTimeStr;
 
@@ -220,7 +215,6 @@ function updateTimers() {
                 countdownEl.innerText = isTimerOn ? formatDurationSeconds(diff) : `Announcement at: ${displayTimeStr}`;
                 card.dataset.priority = "1"; 
             } else if (diff <= 0 && diff > -300) { 
-                // 5 minute (300 second) spawning window
                 countdownEl.innerText = `Spawning in: ${formatDurationSeconds(300 + diff)}`;
                 countdownEl.classList.add('spawning');
                 card.dataset.priority = "0"; 
@@ -232,7 +226,6 @@ function updateTimers() {
         }
     });
 
-    // Sort Cards
     document.querySelectorAll('.card-container').forEach(container => {
         const cards = Array.from(container.children);
         cards.sort((a, b) => {
