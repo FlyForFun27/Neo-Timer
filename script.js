@@ -180,11 +180,6 @@ function updateTimers() {
     const timerToggleEl = document.getElementById('timer-toggle');
     const isTimerOn = timerToggleEl ? timerToggleEl.checked : true;
 
-    // Grab Device time strings
-    const deviceH = now.getHours().toString().padStart(2, '0');
-    const deviceM = now.getMinutes().toString().padStart(2, '0');
-    const deviceS = now.getSeconds().toString().padStart(2, '0');
-
     document.querySelectorAll('.boss-card').forEach(card => {
         const isMonarch = card.classList.contains('monarch-card');
         const countdownEl = card.querySelector('.countdown');
@@ -192,34 +187,26 @@ function updateTimers() {
         const targetTimeStr = card.dataset.target;
         
         const t = parseTimeStr(targetTimeStr);
-        const targetDate = new Date(now.getTime());
-        
-        if (USE_UTC_TIME) {
-            // Forcing seconds and milliseconds to 0 for PERFECT sync
-            targetDate.setUTCHours(t.h, t.m, 0, 0); 
-        } else {
-            targetDate.setHours(t.h, t.m, 0, 0);
-        }
+        const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), t.h, t.m, 0, 0);
 
-        // Format Parsed strings for the debug tool
-        const parsedH = t.h.toString().padStart(2, '0');
-        const parsedM = t.m.toString().padStart(2, '0');
-
+        // DEBUG TEXT
         if (debugEl) {
-            debugEl.innerText = `Device: ${deviceH}:${deviceM}:${deviceS} | Target: ${parsedH}:${parsedM}:00`;
-        }
-
-        if (isMonarch && targetDate > now) {
-            targetDate.setDate(targetDate.getDate() - 1);
+            const deviceTime = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0') + ":" + now.getSeconds().toString().padStart(2,'0');
+            const targetTime = t.h.toString().padStart(2,'0') + ":" + t.m.toString().padStart(2,'0') + ":00";
+            debugEl.innerText = `Device: ${deviceTime} | Target: ${targetTime}`;
         }
 
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
 
         if (isMonarch) {
+            // Monarch Logic: If target is in the future, it was likely from "yesterday's" late kill
+            if (targetDate > now) {
+                targetDate.setDate(targetDate.getDate() - 1);
+            }
+            
             const killTimerEl = card.querySelector('.kill-timer');
             const diffKill = now - targetDate;
-            
             killTimerEl.innerText = formatDuration(diffKill >= 0 ? diffKill : 0);
 
             const spawnDate = new Date(targetDate.getTime() + (2.5 * 3600000));
@@ -234,17 +221,21 @@ function updateTimers() {
                 card.dataset.priority = "0"; 
             }
         } else {
+            // Standard Boss Logic
             const diffMs = targetDate - now;
             const displayTimeStr = targetTimeStr.length >= 5 ? targetTimeStr.substring(0, 5) : targetTimeStr;
 
             if (diffMs > 0) {
+                // Future: Counting down
                 countdownEl.innerText = isTimerOn ? formatDuration(diffMs) : `Announcement at: ${displayTimeStr}`;
                 card.dataset.priority = "1"; 
             } else if (diffMs <= 0 && diffMs > -300000) { 
+                // Currently Spawning (within 5 mins of target)
                 countdownEl.innerText = `Spawning in: ${formatDuration(300000 + diffMs)}`;
                 countdownEl.classList.add('spawning');
                 card.dataset.priority = "0"; 
             } else {
+                // Past: Dimmed
                 countdownEl.innerText = `Spawned`;
                 card.classList.add('dimmed');
                 card.dataset.priority = "2"; 
@@ -252,6 +243,7 @@ function updateTimers() {
         }
     });
 
+    // Re-sort cards based on priority
     document.querySelectorAll('.card-container').forEach(container => {
         const cards = Array.from(container.children);
         cards.sort((a, b) => {
