@@ -2,14 +2,21 @@ const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLr
 
 const USE_UTC_TIME = false; 
 
-// --- ORIGINAL PARSER (WITH SECONDS INCLUDED) ---
+// --- 100% BULLETPROOF PARSER ---
+// Explicitly forces variables so JavaScript cannot duplicate the hours
 function parseTimeStr(timeStr) {
-    if (!timeStr) return { h: 0, m: 0, s: 0 };
-    const parts = timeStr.split(':');
+    if (!timeStr) return { h: 0, m: 0 };
+    
+    const parts = String(timeStr).split(':');
+    
+    // Grab the exact array positions
+    const hourString = parts.length > 0 ? parts : "0";
+    const minuteString = parts.length > 1 ? parts : "0";
+    
     return {
-        h: parseInt(parts, 10) || 0,
-        m: parseInt(parts, 10) || 0,
-        s: parts ? parseInt(parts, 10) : 0
+        h: Number(hourString) || 0,
+        m: Number(minuteString) || 0
+        // We completely ignore the seconds from the spreadsheet to force perfect sync
     };
 }
 
@@ -83,13 +90,11 @@ function updateResetTimers() {
         weeklyReset.setHours(6, 0, 0, 0);
     }
     
-    // Daily Math
     if (now >= dailyReset) {
         dailyReset.setDate(dailyReset.getDate() + 1);
     }
     document.getElementById('daily-reset').innerText = formatDuration(dailyReset - now);
 
-    // Weekly Math (Wednesday)
     let daysUntilWed = (3 - weeklyReset.getDay() + 7) % 7;
     if (daysUntilWed === 0 && now >= weeklyReset) {
         daysUntilWed = 7;
@@ -175,7 +180,7 @@ function updateTimers() {
     const timerToggleEl = document.getElementById('timer-toggle');
     const isTimerOn = timerToggleEl ? timerToggleEl.checked : true;
 
-    // Grab Device time strings for the debug tool
+    // Grab Device time strings
     const deviceH = now.getHours().toString().padStart(2, '0');
     const deviceM = now.getMinutes().toString().padStart(2, '0');
     const deviceS = now.getSeconds().toString().padStart(2, '0');
@@ -190,21 +195,20 @@ function updateTimers() {
         const targetDate = new Date(now.getTime());
         
         if (USE_UTC_TIME) {
-            targetDate.setUTCHours(t.h, t.m, t.s, 0);
+            // Forcing seconds and milliseconds to 0 for PERFECT sync
+            targetDate.setUTCHours(t.h, t.m, 0, 0); 
         } else {
-            targetDate.setHours(t.h, t.m, t.s, 0);
+            targetDate.setHours(t.h, t.m, 0, 0);
         }
 
         // Format Parsed strings for the debug tool
         const parsedH = t.h.toString().padStart(2, '0');
         const parsedM = t.m.toString().padStart(2, '0');
-        const parsedS = t.s.toString().padStart(2, '0');
 
         if (debugEl) {
-            debugEl.innerText = `Device: ${deviceH}:${deviceM}:${deviceS} | Target: ${parsedH}:${parsedM}:${parsedS}`;
+            debugEl.innerText = `Device: ${deviceH}:${deviceM}:${deviceS} | Target: ${parsedH}:${parsedM}:00`;
         }
 
-        // Handle Monarchs killed late at night crossing over into the morning
         if (isMonarch && targetDate > now) {
             targetDate.setDate(targetDate.getDate() - 1);
         }
