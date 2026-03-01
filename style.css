@@ -1,6 +1,6 @@
-/* CSS Variables for easy color switching */
+/* Default accent color set to your Neon Magenta */
 :root {
-    --accent-color: #00ccff; /* Default Neon Blue */
+    --accent-color: #ff00ee; 
     --bg-dark: #111111;
     --card-bg: #1a1a1a;
     --card-inner: #111111;
@@ -156,20 +156,32 @@ input:checked + .slider:before { transform: translateX(16px); }
     font-size: 16px;
 }
 
-/* --- Dimmed State (For past spawns) --- */
+/* Compressed state for bosses that have already spawned */
 .boss-card.dimmed {
-    border: 1px solid #222;
-    border-left: 3px solid #333;
-    opacity: 0.4;
+    opacity: 0.3;
+    padding: 8px 15px; /* Thinner padding */
+    margin-bottom: 10px;
+    border-left: 2px solid #333;
+    border-color: #222;
 }
-.boss-card.dimmed .countdown {
-    color: var(--text-muted);
+/* Hide everything except the name for compressed cards */
+.boss-card.dimmed .countdown-wrapper, 
+.boss-card.dimmed .boss-time,
+.boss-card.dimmed .time-since-kill,
+.boss-card.dimmed .estimated-label {
+    display: none;
+}
+
+.boss-card.dimmed .boss-name {
+    margin: 0;
+    font-size: 13px;
+    color: #777;
 }
 
 /* Red warning state */
 .countdown.spawning {
     color: #ff3333 !important; 
-    font-weight: 800; /* Made slightly bolder to still grab attention */
+    font-weight: 800;
 }
 
 /* --- Monarch Specific Styles --- */
