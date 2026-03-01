@@ -82,14 +82,27 @@ function buildDashboard(data) {
             card.dataset.targetTime = boss.TargetTime;
 
             if (region.toLowerCase() === 'monarch') {
-                card.classList.add('monarch-card');
-                card.innerHTML = `
-                    <p class="boss-name">${boss.BossName}</p>
-                    <p class="time-since-kill">Time since kill: <span class="kill-timer">--</span></p>
-                    <div class="countdown-wrapper">
-                        <div class="estimated-label">ESTIMATED SPAWN IN</div>
-                        <div class="countdown">--</div>
-                    </div>`;
+                
+                // 1. Find all occurrences of this boss across the whole week/all channels
+                const fullSchedule = data
+                    .filter(row => row.BossName === boss.BossName)
+                    .map(row => `<div class="schedule-row"><span>${row.Weekday} (${row.Region})</span> <span>${row.TargetTime}</span></div>`)
+                    .join('');
+                
+            card.classList.add('monarch-card');
+            card.innerHTML = `
+                <p class="boss-name">${boss.BossName}</p>
+                <p class="time-since-kill">Time since kill: <span class="kill-timer">--</span></p>
+                <div class="countdown-wrapper">
+                    <div class="estimated-label">ESTIMATED SPAWN IN</div>
+                    <div class="countdown">--</div>
+                </div>
+                <div class="monarch-details">
+                    <button class="schedule-toggle" onclick="toggleSchedule(this)">View Full Schedule ▼</button>
+                    <div class="schedule-content">
+                        ${fullSchedule}
+                    </div>
+                </div>`;
             } else {
                 card.innerHTML = `
                     <p class="boss-name">${boss.BossName}</p>
