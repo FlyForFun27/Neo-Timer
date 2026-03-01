@@ -34,9 +34,15 @@ document.addEventListener("DOMContentLoaded", () => {
             updateTimers(); 
         }
     });
-
+    
+// (Existing code for Top Clock...)
     setInterval(updateTopClock, 1000);
     updateTopClock();
+
+    // --- NEW: Start Reset Timers ---
+    setInterval(updateResetTimers, 1000);
+    updateResetTimers();
+    
 });
 
 function updateTopClock() {
@@ -184,4 +190,49 @@ function formatDuration(ms) {
     return h > 0 
         ? `${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s` 
         : `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
+}
+
+function updateResetTimers() {
+    const now = new Date();
+
+    // --- 1. Daily Reset (Every day at 6:00 AM) ---
+    const dailyReset = new Date();
+    dailyReset.setHours(6, 0, 0, 0);
+    
+    // If it is currently past 6:00 AM today, the next reset is tomorrow
+    if (now >= dailyReset) {
+        dailyReset.setDate(dailyReset.getDate() + 1);
+    }
+    
+    const dDiff = dailyReset - now;
+    const dH = Math.floor(dDiff / (1000 * 60 * 60));
+    const dM = Math.floor((dDiff % (1000 * 60 * 60)) / (1000 * 60));
+    const dS = Math.floor((dDiff % (1000 * 60)) / 1000);
+    
+    document.getElementById('daily-reset').innerText = 
+        `${dH}h ${dM.toString().padStart(2, '0')}m ${dS.toString().padStart(2, '0')}s`;
+
+    // --- 2. Weekly Reset (Every Wednesday at 6:00 AM) ---
+    const weeklyReset = new Date();
+    weeklyReset.setHours(6, 0, 0, 0);
+    
+    // Date.getDay() returns 0 for Sunday, 1 for Monday, 2 for Tue, 3 for Wed
+    let daysUntilWed = (3 - weeklyReset.getDay() + 7) % 7;
+    
+    // If today is Wednesday (0 days until) BUT it's already past 6:00 AM, push to next week (+7)
+    if (daysUntilWed === 0 && now >= weeklyReset) {
+        daysUntilWed = 7;
+    }
+    weeklyReset.setDate(weeklyReset.getDate() + daysUntilWed);
+    
+    const wDiff = weeklyReset - now;
+    const wD = Math.floor(wDiff / (1000 * 60 * 60 * 24));
+    const wH = Math.floor((wDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const wM = Math.floor((wDiff % (1000 * 60 * 60)) / (1000 * 60));
+    const wS = Math.floor((wDiff % (1000 * 60)) / 1000);
+
+    // Only display days if there is 1 or more days left
+    const daysStr = wD > 0 ? `${wD}d ` : '';
+    document.getElementById('weekly-reset').innerText = 
+        `${daysStr}${wH}h ${wM.toString().padStart(2, '0')}m ${wS.toString().padStart(2, '0')}s`;
 }
