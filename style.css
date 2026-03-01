@@ -158,24 +158,31 @@ input:checked + .slider:before { transform: translateX(16px); }
 
 /* Compressed state for bosses that have already spawned */
 .boss-card.dimmed {
-    opacity: 0.3;
-    padding: 8px 15px; /* Thinner padding */
+    opacity: 0.35;
+    padding: 12px 15px; 
     margin-bottom: 10px;
-    border-left: 2px solid #333;
-    border-color: #222;
+    border: 1px solid #222;
+    border-left: 1px solid #222; /* Removes the bright colored left border */
+    background-color: #151515;
 }
+
 /* Hide everything except the name for compressed cards */
 .boss-card.dimmed .countdown-wrapper, 
-.boss-card.dimmed .boss-time,
 .boss-card.dimmed .time-since-kill,
 .boss-card.dimmed .estimated-label {
     display: none;
 }
 
 .boss-card.dimmed .boss-name {
+    margin: 0 0 4px 0; /* Tiny gap between name and time */
+    font-size: 14px;
+    color: #888;
+}
+
+.boss-card.dimmed .boss-time {
     margin: 0;
-    font-size: 13px;
-    color: #777;
+    font-size: 12px;
+    color: #666;
 }
 
 /* Red warning state */
