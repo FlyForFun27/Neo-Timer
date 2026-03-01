@@ -1,152 +1,111 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Color Picker Logic
+    // 1. Initialize Color Picker
     const colorDots = document.querySelectorAll('.color-dot');
     colorDots.forEach(dot => {
         dot.addEventListener('click', (e) => {
             const selectedColor = e.target.getAttribute('data-color');
+            // This changes the CSS variable, instantly updating the whole UI
             document.documentElement.style.setProperty('--accent-color', selectedColor);
         });
     });
 
-    const timerToggle = document.getElementById('timer-toggle');
-    if (timerToggle) { timerToggle.addEventListener('change', updateTimers); }
-
-    // Fetch CSV Data
+    // 2. Fetch CSV Data
     Papa.parse(sheetUrl, {
         download: true,
         header: true,
         skipEmptyLines: true,
         complete: function(results) {
             buildDashboard(results.data);
+            
+            // Start the timer loop
             setInterval(updateTimers, 1000);
             updateTimers(); 
         }
     });
 
+    // 3. Start Top Right Clock
     setInterval(updateTopClock, 1000);
     updateTopClock();
 });
 
 function updateTopClock() {
     const now = new Date();
-    document.getElementById('top-clock').innerText = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    // Formats time as "2:00 AM"
+    const timeString = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    document.getElementById('top-clock').innerText = timeString;
 }
 
 function buildDashboard(data) {
     const grid = document.getElementById('timers-grid');
     grid.innerHTML = ''; 
+    
     const today = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(new Date());
-    const todaysData = data.filter(row => row.Weekday === today);
-    const activeRegions = [...new Set(todaysData.map(row => row.Region))];
 
-    activeRegions.forEach(region => {
+    const todaysData = data.filter(row => row.Weekday === today);
+    const activeRegionsForToday = [...new Set(todaysData.map(row => row.Region))];
+
+    activeRegionsForToday.forEach(region => {
         const col = document.createElement('div');
         col.className = 'region-column';
-        // Add an inner container specifically for sorting the cards easily
-        col.innerHTML = `<h3>${region.toUpperCase()}</h3><div class="card-container"></div>`;
-        
-        const container = col.querySelector('.card-container');
+        col.innerHTML = `<h3>${region}</h3>`;
+
         const regionBosses = todaysData.filter(row => row.Region === region);
         
         regionBosses.forEach(boss => {
             const card = document.createElement('div');
             card.className = 'boss-card';
-            card.dataset.target = boss.TargetTime; // Store time for sorting
-
-            if (region.toLowerCase() === 'monarch') {
-                card.classList.add('monarch-card');
-                card.innerHTML = `
-                    <p class="boss-name">${boss.BossName}</p>
-                    <p class="time-since-kill">Time since kill: <span class="kill-timer" data-time="${boss.TargetTime}">--</span></p>
-                    <div class="countdown-wrapper">
-                        <div class="estimated-label">ESTIMATED SPAWN IN</div>
-                        <div class="countdown" data-time="${boss.TargetTime}">--</div>
-                    </div>`;
-            } else {
-                card.innerHTML = `
-                    <p class="boss-name">${boss.BossName}</p>
-                    <p class="boss-time">Time: ${boss.TargetTime}</p>
-                    <div class="countdown-wrapper"><div class="countdown" data-time="${boss.TargetTime}">--</div></div>`;
-            }
-            container.appendChild(card);
+            
+            card.innerHTML = `
+                <p class="boss-name">${boss.BossName}</p>
+                <p class="boss-time">Time: ${boss.TargetTime}</p>
+                <div class="countdown-wrapper">
+                    <div class="countdown" data-time="${boss.TargetTime}">Calculating...</div>
+                </div>
+            `;
+            col.appendChild(card);
         });
+
         grid.appendChild(col);
     });
 }
 
 function updateTimers() {
     const now = new Date(); 
-    const isTimerOn = document.getElementById('timer-toggle').checked;
+    const countdownElements = document.querySelectorAll('.countdown');
 
-    document.querySelectorAll('.boss-card').forEach(card => {
-        const isMonarch = card.classList.contains('monarch-card');
-        const countdownEl = card.querySelector('.countdown');
-        const targetTimeStr = card.dataset.target;
+    countdownElements.forEach(el => {
+        const targetTimeStr = el.getAttribute('data-time');
+        if (!targetTimeStr) return;
         
         const timeParts = targetTimeStr.split(':');
+        const targetHours = parseInt(timeParts, 10);
+        const targetMinutes = parseInt(timeParts, 10);
+        
         const targetDate = new Date();
-        targetDate.setHours(parseInt(timeParts), parseInt(timeParts), 0, 0);
+        targetDate.setHours(targetHours, targetMinutes, 0, 0);
 
-        card.classList.remove('dimmed');
-        countdownEl.classList.remove('spawning');
+        const diffMs = targetDate - now;
+        const cardElement = el.closest('.boss-card');
 
-        if (isMonarch) {
-            const killTimerEl = card.querySelector('.kill-timer');
-            let diffKill = now - targetDate;
-            killTimerEl.innerText = formatDuration(diffKill >= 0 ? diffKill : 0);
-
-            const spawnDate = new Date(targetDate.getTime() + (2.5 * 60 * 60 * 1000));
-            const diffSpawn = spawnDate - now;
-
-            if (diffSpawn > 0) {
-                countdownEl.innerText = formatDuration(diffSpawn);
-                card.dataset.priority = "1"; // Upcoming
-            } else {
-                countdownEl.innerText = `In Window`;
-                countdownEl.classList.add('spawning');
-                card.dataset.priority = "0"; // Highest priority
-            }
+        if (diffMs > 0) {
+            // Future Boss
+            const hours = Math.floor(diffMs / (1000 * 60 * 60));
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+            
+            const formattedM = minutes.toString().padStart(2, '0');
+            const formattedS = seconds.toString().padStart(2, '0');
+            
+            // Format to match screenshot: "3h 37m 08s"
+            el.innerText = `${hours}h ${formattedM}m ${formattedS}s`;
+            cardElement.classList.remove('dimmed'); 
+            
         } else {
-            const diffMs = targetDate - now;
-            if (diffMs > 0) {
-                countdownEl.innerText = isTimerOn ? formatDuration(diffMs) : `Announcement at: ${targetTimeStr}`;
-                card.dataset.priority = "1"; // Upcoming
-            } else if (diffMs <= 0 && diffMs > -300000) { 
-                countdownEl.innerText = `Spawning in: ${formatDuration(300000 + diffMs)}`;
-                countdownEl.classList.add('spawning');
-                card.dataset.priority = "0"; // Highest Priority
-            } else {
-                countdownEl.innerText = `Spawned`;
-                card.classList.add('dimmed');
-                card.dataset.priority = "2"; // Lowest Priority (Moves to bottom)
-            }
+            // Past Boss
+            el.innerText = `Spawned`;
+            cardElement.classList.add('dimmed'); 
         }
     });
-
-    // --- SORTING LOGIC ---
-    document.querySelectorAll('.card-container').forEach(container => {
-        const cards = Array.from(container.children);
-        cards.sort((a, b) => {
-            // Sort by priority first (0, then 1, then 2)
-            if (a.dataset.priority !== b.dataset.priority) {
-                return a.dataset.priority - b.dataset.priority;
-            }
-            // If they have the same priority, sort them by target time (earliest first)
-            return a.dataset.target.localeCompare(b.dataset.target);
-        });
-        // Re-append to the DOM in the sorted order
-        cards.forEach(card => container.appendChild(card));
-    });
-}
-
-// Helper function to keep formatting clean
-function formatDuration(ms) {
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    return h > 0 
-        ? `${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s` 
-        : `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
 }
