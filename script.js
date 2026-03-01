@@ -1,28 +1,30 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
-// SET TO 'true' IF YOUR SHEET TIMES ARE SERVER TIME (UTC)
-// SET TO 'false' IF YOUR SHEET TIMES ARE YOUR LOCAL TIME
 const USE_UTC_TIME = false; 
 
-// --- ORIGINAL PARSING HELPER ---
+// --- ORIGINAL PARSER ---
 function parseTimeStr(timeStr) {
-    if (!timeStr) return { h: 0, m: 0, s: 0 };
+    if (!timeStr) return { h: 0, m: 0 };
     const parts = timeStr.split(':');
     return {
         h: parseInt(parts, 10) || 0,
-        m: parseInt(parts, 10) || 0,
-        s: parts ? parseInt(parts, 10) : 0
+        m: parseInt(parts, 10) || 0
+        // Seconds are intentionally dropped. This forces every single 
+        // timer to target the exact :00 mark so they tick in perfect sync.
     };
 }
 
-// --- ORIGINAL FORMATTER ---
+// --- GLOBAL FORMATTER ---
 function formatDuration(ms) {
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    return h > 0 
-        ? `${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s` 
-        : `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
+    const totalSeconds = Math.floor(ms / 1000); // Cleans up any weird decimal drift
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    
+    if (h > 0) {
+        return `${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
+    }
+    return `${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -71,8 +73,8 @@ function updateTopClock() {
 
 function updateResetTimers() {
     const now = new Date();
-    const dailyReset = new Date();
-    const weeklyReset = new Date();
+    const dailyReset = new Date(now.getTime());
+    const weeklyReset = new Date(now.getTime());
 
     if (USE_UTC_TIME) {
         dailyReset.setUTCHours(6, 0, 0, 0);
@@ -86,11 +88,7 @@ function updateResetTimers() {
     if (now >= dailyReset) {
         dailyReset.setDate(dailyReset.getDate() + 1);
     }
-    const dDiff = dailyReset - now;
-    const dH = Math.floor(dDiff / 3600000);
-    const dM = Math.floor((dDiff % 3600000) / 60000);
-    const dS = Math.floor((dDiff % 60000) / 1000);
-    document.getElementById('daily-reset').innerText = `${dH}h ${dM.toString().padStart(2, '0')}m ${dS.toString().padStart(2, '0')}s`;
+    document.getElementById('daily-reset').innerText = formatDuration(dailyReset - now);
 
     // Weekly Math (Wednesday)
     let daysUntilWed = (3 - weeklyReset.getDay() + 7) % 7;
@@ -101,11 +99,10 @@ function updateResetTimers() {
     
     const wDiff = weeklyReset - now;
     const wD = Math.floor(wDiff / 86400000);
-    const wH = Math.floor((wDiff % 86400000) / 3600000);
-    const wM = Math.floor((wDiff % 3600000) / 60000);
-    const wS = Math.floor((wDiff % 60000) / 1000);
+    const wRemainder = wDiff % 86400000;
     const daysStr = wD > 0 ? `${wD}d ` : '';
-    document.getElementById('weekly-reset').innerText = `${daysStr}${wH}h ${wM.toString().padStart(2, '0')}m ${wS.toString().padStart(2, '0')}s`;
+    
+    document.getElementById('weekly-reset').innerText = `${daysStr}${formatDuration(wRemainder)}`;
 }
 
 function buildDashboard(data) {
@@ -181,12 +178,17 @@ function updateTimers() {
         const targetTimeStr = card.dataset.target;
         
         const t = parseTimeStr(targetTimeStr);
-        const targetDate = new Date();
+        const targetDate = new Date(now.getTime());
         
         if (USE_UTC_TIME) {
-            targetDate.setUTCHours(t.h, t.m, t.s, 0);
+            targetDate.setUTCHours(t.h, t.m, 0, 0);
         } else {
-            targetDate.setHours(t.h, t.m, t.s, 0);
+            targetDate.setHours(t.h, t.m, 0, 0);
+        }
+
+        // Handle Monarchs killed late at night crossing over into the morning
+        if (isMonarch && targetDate > now) {
+            targetDate.setDate(targetDate.getDate() - 1);
         }
 
         card.classList.remove('dimmed');
@@ -194,14 +196,9 @@ function updateTimers() {
 
         if (isMonarch) {
             const killTimerEl = card.querySelector('.kill-timer');
-            let diffKill = now - targetDate;
+            const diffKill = now - targetDate;
             
-            // If the kill target was earlier today (or yesterday), prevent negative numbers
-            if (diffKill < 0) {
-                diffKill = 0;
-            }
-            
-            killTimerEl.innerText = formatDuration(diffKill);
+            killTimerEl.innerText = formatDuration(diffKill >= 0 ? diffKill : 0);
 
             const spawnDate = new Date(targetDate.getTime() + (2.5 * 3600000));
             const diffSpawn = spawnDate - now;
