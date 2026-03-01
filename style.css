@@ -1,5 +1,5 @@
 :root {
-    --accent-color: #4cc9f0; /* New Default Color */
+    --accent-color: #4cc9f0;
     --bg-dark: #111111;
     --card-bg: #1a1a1a;
     --card-inner: #111111;
@@ -15,9 +15,9 @@ body {
     padding: 0 40px;
 }
 
-/* Update top-bar to handle the new middle section */
+/* --- Header & Controls --- */
 .top-bar {
-    position: relative; 
+    position: relative; /* Anchor for absolute centering */
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -30,6 +30,42 @@ body {
     color: var(--accent-color);
     margin: 0;
     font-size: 24px;
+}
+
+/* --- Global Resets Section --- */
+.global-resets {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%); /* Dead center */
+    display: flex;
+    gap: 30px;
+    background: #1a1a1a;
+    padding: 8px 20px;
+    border-radius: 4px;
+    border: 1px solid #222;
+    white-space: nowrap;
+}
+
+.reset-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.reset-label {
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.reset-value {
+    color: var(--accent-color);
+    font-weight: 600;
+    font-size: 13px;
+    font-family: monospace;
 }
 
 .header-controls {
@@ -166,7 +202,6 @@ input:checked + .slider:before { transform: translateX(16px); }
     color: var(--text-muted);
 }
 
-/* Red warning state - No animation to keep it clean */
 .countdown.spawning {
     color: #ff0000 !important;
     font-weight: 800;
@@ -187,16 +222,15 @@ input:checked + .slider:before { transform: translateX(16px); }
     letter-spacing: 1px;
 }
 
-/* Hide ONLY the countdown box and Monarch extras, KEEP the base time */
+/* Compressed State */
 .boss-card.dimmed .countdown-wrapper, 
 .boss-card.dimmed .time-since-kill,
 .boss-card.dimmed .estimated-label {
     display: none;
 }
 
-/* Style the text for the compressed state */
 .boss-card.dimmed .boss-name {
-    margin: 0 0 4px 0; /* Tiny gap between name and time */
+    margin: 0 0 4px 0;
     font-size: 14px;
     color: #888;
 }
@@ -207,83 +241,51 @@ input:checked + .slider:before { transform: translateX(16px); }
     color: #666;
 }
 
-/* --- Global Resets Section --- */
-.global-resets {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%); /* This perfectly centers it */
-    display: flex;
-    gap: 30px;
-    background: #1a1a1a;
-    padding: 8px 20px;
-    border-radius: 4px;
+/* --- Global Monarch Dropdown --- */
+.monarch-dropdown {
+    margin-top: 15px;
+    background-color: var(--card-bg);
     border: 1px solid #222;
-    white-space: nowrap; /* Prevents wrapping on small screens */
+    border-radius: 4px;
+    padding: 10px 15px;
 }
 
-.reset-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.reset-label {
+.monarch-dropdown summary {
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 2px;
-}
-
-.reset-value {
-    color: var(--accent-color);
+    cursor: pointer;
+    text-align: center;
+    list-style: none;
+    transition: color 0.2s;
     font-weight: 600;
-    font-size: 13px;
-    font-family: monospace; /* Keeps numbers from jumping */
 }
 
-/* --- Monarch Dropdown Styles --- */
-.monarch-details {
+.monarch-dropdown summary::-webkit-details-marker {
+    display: none; 
+}
+
+.monarch-dropdown summary:hover {
+    color: var(--accent-color);
+}
+
+.schedule-list {
     margin-top: 10px;
     border-top: 1px solid #333;
     padding-top: 10px;
-}
-
-.schedule-toggle {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 11px;
-    text-transform: uppercase;
-    cursor: pointer;
-    width: 100%;
-    padding: 5px 0;
-    transition: color 0.2s;
-}
-
-.schedule-toggle:hover {
-    color: var(--accent-color);
-}
-
-.schedule-content {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease-out;
-    text-align: left;
-    font-size: 11px;
-    color: var(--text-muted);
-}
-
-.schedule-content.open {
-    max-height: 200px; /* Adjust if the list is very long */
+    max-height: 200px;
     overflow-y: auto;
 }
 
 .schedule-row {
     display: flex;
     justify-content: space-between;
-    padding: 2px 0;
+    padding: 4px 0;
+    font-size: 11px;
+    color: var(--text-muted);
     border-bottom: 1px solid #222;
 }
 
-.schedule-row:last-child { border-bottom: none; }
+.schedule-row:last-child {
+    border-bottom: none;
+}
