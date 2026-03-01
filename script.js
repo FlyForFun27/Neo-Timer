@@ -155,7 +155,7 @@ function updateTimers() {
                         ? `${hours}h ${formattedM}m ${formattedS}s` 
                         : `${formattedM}m ${formattedS}s`;
                 } else {
-                    countdownEl.innerText = `Announcement in: ${targetTimeStr}`;
+                    countdownEl.innerText = `Announcement at: ${targetTimeStr}`;
                 }
             } else if (diffMs <= 0 && diffMs > -300000) { 
                 const spawnRemainingMs = 300000 + diffMs; 
