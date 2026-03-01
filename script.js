@@ -1,7 +1,6 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Color Picker Logic
     const colorDots = document.querySelectorAll('.color-dot');
     colorDots.forEach(dot => {
         dot.addEventListener('click', (e) => {
@@ -13,7 +12,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const timerToggle = document.getElementById('timer-toggle');
     if (timerToggle) { timerToggle.addEventListener('change', updateTimers); }
 
-    // Fetch CSV Data
     Papa.parse(sheetUrl, {
         download: true,
         header: true,
@@ -44,16 +42,16 @@ function buildDashboard(data) {
     activeRegions.forEach(region => {
         const col = document.createElement('div');
         col.className = 'region-column';
-        // Add an inner container specifically for sorting the cards easily
         col.innerHTML = `<h3>${region.toUpperCase()}</h3><div class="card-container"></div>`;
         
         const container = col.querySelector('.card-container');
         const regionBosses = todaysData.filter(row => row.Region === region);
         
+        // Build the active cards
         regionBosses.forEach(boss => {
             const card = document.createElement('div');
             card.className = 'boss-card';
-            card.dataset.target = boss.TargetTime; // Store time for sorting
+            card.dataset.target = boss.TargetTime; 
 
             if (region.toLowerCase() === 'monarch') {
                 card.classList.add('monarch-card');
@@ -72,6 +70,27 @@ function buildDashboard(data) {
             }
             container.appendChild(card);
         });
+
+        // --- NEW: Inject the Collapsible Dropdown for Monarch ---
+        if (region.toLowerCase() === 'monarch') {
+            const details = document.createElement('details');
+            details.className = 'monarch-dropdown';
+            
+            let listHTML = '';
+            // Sort them chronologically just for the list view
+            const sortedBosses = [...regionBosses].sort((a, b) => a.TargetTime.localeCompare(b.TargetTime));
+            
+            sortedBosses.forEach(b => {
+                listHTML += `<li><strong>${b.BossName}</strong> <span>${b.TargetTime}</span></li>`;
+            });
+
+            details.innerHTML = `
+                <summary>View All Logged Times</summary>
+                <ul>${listHTML}</ul>
+            `;
+            col.appendChild(details); // Appends it at the bottom of the Monarch column
+        }
+
         grid.appendChild(col);
     });
 }
@@ -120,7 +139,7 @@ function updateTimers() {
             } else {
                 countdownEl.innerText = `Spawned`;
                 card.classList.add('dimmed');
-                card.dataset.priority = "2"; // Lowest Priority (Moves to bottom)
+                card.dataset.priority = "2"; // Drops to bottom
             }
         }
     });
@@ -129,19 +148,15 @@ function updateTimers() {
     document.querySelectorAll('.card-container').forEach(container => {
         const cards = Array.from(container.children);
         cards.sort((a, b) => {
-            // Sort by priority first (0, then 1, then 2)
             if (a.dataset.priority !== b.dataset.priority) {
                 return a.dataset.priority - b.dataset.priority;
             }
-            // If they have the same priority, sort them by target time (earliest first)
             return a.dataset.target.localeCompare(b.dataset.target);
         });
-        // Re-append to the DOM in the sorted order
         cards.forEach(card => container.appendChild(card));
     });
 }
 
-// Helper function to keep formatting clean
 function formatDuration(ms) {
     const h = Math.floor(ms / 3600000);
     const m = Math.floor((ms % 3600000) / 60000);
