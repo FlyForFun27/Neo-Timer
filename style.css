@@ -17,6 +17,7 @@ body {
 
 /* Update top-bar to handle the new middle section */
 .top-bar {
+    position: relative; 
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -208,12 +209,16 @@ input:checked + .slider:before { transform: translateX(16px); }
 
 /* --- Global Resets Section --- */
 .global-resets {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%); /* This perfectly centers it */
     display: flex;
     gap: 30px;
     background: #1a1a1a;
     padding: 8px 20px;
     border-radius: 4px;
     border: 1px solid #222;
+    white-space: nowrap; /* Prevents wrapping on small screens */
 }
 
 .reset-item {
