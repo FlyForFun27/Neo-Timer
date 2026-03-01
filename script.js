@@ -1,7 +1,6 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Initialize Color Picker
     const colorDots = document.querySelectorAll('.color-dot');
     colorDots.forEach(dot => {
         dot.addEventListener('click', (e) => {
@@ -10,13 +9,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 2. Initialize Timer Toggle
     const timerToggle = document.getElementById('timer-toggle');
     if (timerToggle) {
         timerToggle.addEventListener('change', updateTimers);
     }
 
-    // 3. Fetch CSV Data
     Papa.parse(sheetUrl, {
         download: true,
         header: true,
@@ -31,7 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // 4. Start Top Right Clock
     setInterval(updateTopClock, 1000);
     updateTopClock();
 });
@@ -62,7 +58,6 @@ function buildDashboard(data) {
             const card = document.createElement('div');
             card.className = 'boss-card';
             
-            // --- NEW LOGIC: Check if it's a Monarch Boss ---
             if (region.toLowerCase() === 'monarch') {
                 card.classList.add('monarch-card');
                 card.innerHTML = `
@@ -74,7 +69,6 @@ function buildDashboard(data) {
                     </div>
                 `;
             } else {
-                // --- REGULAR LOGIC ---
                 card.innerHTML = `
                     <p class="boss-name">${boss.BossName}</p>
                     <p class="boss-time">Time: ${boss.TargetTime}</p>
@@ -109,20 +103,14 @@ function updateTimers() {
         const targetDate = new Date();
         targetDate.setHours(targetHours, targetMinutes, 0, 0);
 
-        // Reset states
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
         countdownEl.style.color = "";
 
-        // ==========================================
-        //         MONARCH LOGIC (Count UP & +2.5h)
-        // ==========================================
         if (isMonarch) {
             const killTimerEl = card.querySelector('.kill-timer');
-            
-            // 1. Time since kill (Now - TargetTime)
             let diffKill = now - targetDate;
-            if (diffKill < 0) diffKill = 0; // Fallback if time is slightly weird
+            if (diffKill < 0) diffKill = 0; 
             
             const killH = Math.floor(diffKill / (1000 * 60 * 60));
             const killM = Math.floor((diffKill % (1000 * 60 * 60)) / (1000 * 60));
@@ -130,8 +118,7 @@ function updateTimers() {
             
             killTimerEl.innerText = `${killH}h ${killM}m ${killS}s`;
 
-            // 2. Estimated Spawn (TargetTime + 2.5 hours)
-            // 2.5 hours = 2 hours and 30 minutes = 9,000,000 milliseconds
+            // 2.5 hour window calculation
             const spawnDate = new Date(targetDate.getTime() + (2.5 * 60 * 60 * 1000));
             const diffSpawn = spawnDate - now;
 
@@ -147,14 +134,11 @@ function updateTimers() {
                     ? `${spawnH}h ${formattedM}m ${formattedS}s` 
                     : `${formattedM}m ${formattedS}s`;
             } else {
-                // If the 2.5 hours have passed, highlight it!
-                countdownEl.innerText = `Spawning / Active`;
+                // Changed "Spawning / Active" to "In Window"
+                countdownEl.innerText = `In Window`;
                 countdownEl.classList.add('spawning');
             }
 
-        // ==========================================
-        //         REGULAR BOSS LOGIC
-        // ==========================================
         } else {
             const diffMs = targetDate - now;
 
