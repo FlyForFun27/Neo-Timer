@@ -2,21 +2,20 @@ const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLr
 
 const USE_UTC_TIME = false; 
 
-// --- ORIGINAL PARSER ---
+// --- ORIGINAL PARSER (WITH SECONDS INCLUDED) ---
 function parseTimeStr(timeStr) {
-    if (!timeStr) return { h: 0, m: 0 };
+    if (!timeStr) return { h: 0, m: 0, s: 0 };
     const parts = timeStr.split(':');
     return {
         h: parseInt(parts, 10) || 0,
-        m: parseInt(parts, 10) || 0
-        // Seconds are intentionally dropped. This forces every single 
-        // timer to target the exact :00 mark so they tick in perfect sync.
+        m: parseInt(parts, 10) || 0,
+        s: parts ? parseInt(parts, 10) : 0
     };
 }
 
 // --- GLOBAL FORMATTER ---
 function formatDuration(ms) {
-    const totalSeconds = Math.floor(ms / 1000); // Cleans up any weird decimal drift
+    const totalSeconds = Math.floor(ms / 1000); 
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
@@ -133,12 +132,16 @@ function buildDashboard(data) {
                     <div class="countdown-wrapper">
                         <div class="estimated-label">ESTIMATED SPAWN IN</div>
                         <div class="countdown" data-time="${fullTime}">--</div>
+                        <div class="math-debug" style="font-size:10px; color:var(--text-muted); margin-top:4px;"></div>
                     </div>`;
             } else {
                 card.innerHTML = `
                     <p class="boss-name">${boss.BossName}</p>
                     <p class="boss-time">Time: ${displayTime}</p>
-                    <div class="countdown-wrapper"><div class="countdown" data-time="${fullTime}">--</div></div>`;
+                    <div class="countdown-wrapper">
+                        <div class="countdown" data-time="${fullTime}">--</div>
+                        <div class="math-debug" style="font-size:10px; color:var(--text-muted); margin-top:4px;"></div>
+                    </div>`;
             }
             container.appendChild(card);
         });
@@ -172,18 +175,33 @@ function updateTimers() {
     const timerToggleEl = document.getElementById('timer-toggle');
     const isTimerOn = timerToggleEl ? timerToggleEl.checked : true;
 
+    // Grab Device time strings for the debug tool
+    const deviceH = now.getHours().toString().padStart(2, '0');
+    const deviceM = now.getMinutes().toString().padStart(2, '0');
+    const deviceS = now.getSeconds().toString().padStart(2, '0');
+
     document.querySelectorAll('.boss-card').forEach(card => {
         const isMonarch = card.classList.contains('monarch-card');
         const countdownEl = card.querySelector('.countdown');
+        const debugEl = card.querySelector('.math-debug');
         const targetTimeStr = card.dataset.target;
         
         const t = parseTimeStr(targetTimeStr);
         const targetDate = new Date(now.getTime());
         
         if (USE_UTC_TIME) {
-            targetDate.setUTCHours(t.h, t.m, 0, 0);
+            targetDate.setUTCHours(t.h, t.m, t.s, 0);
         } else {
-            targetDate.setHours(t.h, t.m, 0, 0);
+            targetDate.setHours(t.h, t.m, t.s, 0);
+        }
+
+        // Format Parsed strings for the debug tool
+        const parsedH = t.h.toString().padStart(2, '0');
+        const parsedM = t.m.toString().padStart(2, '0');
+        const parsedS = t.s.toString().padStart(2, '0');
+
+        if (debugEl) {
+            debugEl.innerText = `Device: ${deviceH}:${deviceM}:${deviceS} | Target: ${parsedH}:${parsedM}:${parsedS}`;
         }
 
         // Handle Monarchs killed late at night crossing over into the morning
