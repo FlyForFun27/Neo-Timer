@@ -1,79 +1,167 @@
-/* Base Dark Theme matching your image */
-body {
-    background-color: #0c0c0c;
-    color: #e0e0e0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 0;
-    padding: 20px;
+/* CSS Variables for easy color switching */
+:root {
+    --accent-color: #00ccff; /* Default Neon Blue */
+    --bg-dark: #111111;
+    --card-bg: #1a1a1a;
+    --card-inner: #111111;
+    --text-light: #ffffff;
+    --text-muted: #888888;
 }
 
-.logo-text {
-    color: #00ccff; /* Neon Blue */
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-light);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0 40px;
+}
+
+/* --- Header & Controls --- */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 1px solid #222;
     margin-bottom: 30px;
 }
 
-/* Flexbox Grid for the Columns */
+.logo-text {
+    color: var(--accent-color);
+    margin: 0;
+    font-size: 24px;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Color Picker */
+.color-picker {
+    display: flex;
+    gap: 8px;
+    background: #1a1a1a;
+    padding: 5px 10px;
+    border-radius: 20px;
+}
+
+.color-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.color-dot:hover {
+    transform: scale(1.2);
+}
+
+/* Toggle Switch */
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #333;
+    transition: .4s;
+    border-radius: 34px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 12px; width: 12px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+input:checked + .slider { background-color: var(--accent-color); }
+input:checked + .slider:before { transform: translateX(16px); }
+
+.current-time {
+    color: var(--text-light);
+    font-size: 14px;
+    min-width: 60px;
+}
+
+/* --- Grid & Columns --- */
 .timers-grid {
     display: flex;
-    gap: 30px;
+    gap: 20px;
     align-items: flex-start;
 }
 
 .region-column {
-    flex: 1; /* Makes columns equal width */
-    min-width: 300px;
+    flex: 1;
+    min-width: 320px;
 }
 
 .region-column h3 {
-    color: #888;
+    color: var(--text-muted);
     text-transform: uppercase;
     font-size: 14px;
-    border-bottom: 1px solid #333;
-    padding-bottom: 10px;
     margin-bottom: 15px;
+    font-weight: 500;
 }
 
-/* Boss Card Styling */
+/* --- Boss Cards --- */
 .boss-card {
-    background-color: #111;
-    border: 1px solid #222;
+    background-color: var(--card-bg);
+    border: 1px solid var(--accent-color);
     border-radius: 4px;
     padding: 15px;
     margin-bottom: 15px;
-    /* The subtle glowing left border from your design */
-    border-left: 2px solid #00ccff; 
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    border-left: 3px solid var(--accent-color); 
 }
 
 .boss-name {
-    font-weight: bold;
-    font-size: 16px;
+    font-weight: 600;
+    font-size: 15px;
     margin: 0 0 5px 0;
 }
 
 .boss-time {
-    color: #777;
+    color: var(--text-muted);
     font-size: 12px;
     margin: 0 0 15px 0;
 }
 
-.countdown {
+.countdown-wrapper {
+    background-color: var(--card-inner);
+    padding: 12px;
+    border-radius: 4px;
     text-align: center;
-    color: #00ccff;
+}
+
+.countdown {
+    color: var(--accent-color);
     font-weight: bold;
-    font-size: 18px;
-    background-color: #1a1a1a;
-    padding: 10px;
-    border-radius: 3px;
+    font-size: 16px;
 }
 
-/* Color change for bosses that have already spawned */
+/* --- Dimmed State (For past spawns) --- */
 .boss-card.dimmed {
+    border: 1px solid #222;
+    border-left: 3px solid #333;
     opacity: 0.4;
-    border-left: 2px solid #444; /* Changes the neon blue border to dark grey */
 }
-
 .boss-card.dimmed .countdown {
-    color: #777; /* Dims the bright blue text */
-    background-color: transparent;
+    color: var(--text-muted);
 }
