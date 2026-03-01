@@ -8,8 +8,23 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body>
-    <header>
+    <header class="top-bar">
         <h1 class="logo-text">Neo Boss Timers</h1>
+        
+        <div class="header-controls">
+            <div class="color-picker">
+                <div class="color-dot" data-color="#9d4edd" style="background: #9d4edd;"></div> <div class="color-dot" data-color="#00ccff" style="background: #00ccff;"></div> <div class="color-dot" data-color="#06d6a0" style="background: #06d6a0;"></div> <div class="color-dot" data-color="#ffd166" style="background: #ffd166;"></div> <div class="color-dot" data-color="#ff7b00" style="background: #ff7b00;"></div> <div class="color-dot" data-color="#8e9aaf" style="background: #8e9aaf;"></div> <div class="color-dot" data-color="#e0e0e0" style="background: #e0e0e0;"></div> </div>
+
+            <div class="toggle-container">
+                <span class="toggle-label">Timer</span>
+                <label class="switch">
+                    <input type="checkbox" checked>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+
+            <div class="current-time" id="top-clock">--:-- AM</div>
+        </div>
     </header>
 
     <main class="dashboard-container">
