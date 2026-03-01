@@ -1,167 +1,173 @@
-/* CSS Variables for easy color switching */
-:root {
-    --accent-color: #00ccff; /* Default Neon Blue */
-    --bg-dark: #111111;
-    --card-bg: #1a1a1a;
-    --card-inner: #111111;
-    --text-light: #ffffff;
-    --text-muted: #888888;
+const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
+
+document.addEventListener("DOMContentLoaded", () => {
+    const colorDots = document.querySelectorAll('.color-dot');
+    colorDots.forEach(dot => {
+        dot.addEventListener('click', (e) => {
+            const selectedColor = e.target.getAttribute('data-color');
+            document.documentElement.style.setProperty('--accent-color', selectedColor);
+        });
+    });
+
+    const timerToggle = document.getElementById('timer-toggle');
+    if (timerToggle) {
+        timerToggle.addEventListener('change', updateTimers);
+    }
+
+    Papa.parse(sheetUrl, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+            buildDashboard(results.data);
+            setInterval(updateTimers, 1000);
+            updateTimers(); 
+        },
+        error: function(err) {
+            console.error("Error loading CSV:", err);
+        }
+    });
+
+    setInterval(updateTopClock, 1000);
+    updateTopClock();
+});
+
+function updateTopClock() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    document.getElementById('top-clock').innerText = timeString;
 }
 
-body {
-    background-color: var(--bg-dark);
-    color: var(--text-light);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 0;
-    padding: 0 40px;
+function buildDashboard(data) {
+    const grid = document.getElementById('timers-grid');
+    grid.innerHTML = ''; 
+    
+    const today = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(new Date());
+    const todaysData = data.filter(row => row.Weekday === today);
+    const activeRegionsForToday = [...new Set(todaysData.map(row => row.Region))];
+
+    activeRegionsForToday.forEach(region => {
+        const col = document.createElement('div');
+        col.className = 'region-column';
+        col.innerHTML = `<h3>${region.toUpperCase()}</h3>`;
+
+        const regionBosses = todaysData.filter(row => row.Region === region);
+        regionBosses.sort((a, b) => a.TargetTime.localeCompare(b.TargetTime));
+        
+        regionBosses.forEach(boss => {
+            const card = document.createElement('div');
+            card.className = 'boss-card';
+            
+            if (region.toLowerCase() === 'monarch') {
+                card.classList.add('monarch-card');
+                card.innerHTML = `
+                    <p class="boss-name">${boss.BossName}</p>
+                    <p class="time-since-kill">Time since kill: <span class="kill-timer" data-time="${boss.TargetTime}">--h --m --s</span></p>
+                    <div class="countdown-wrapper">
+                        <div class="estimated-label">ESTIMATED SPAWN IN</div>
+                        <div class="countdown" data-time="${boss.TargetTime}">Calculating...</div>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <p class="boss-name">${boss.BossName}</p>
+                    <p class="boss-time">Time: ${boss.TargetTime}</p>
+                    <div class="countdown-wrapper">
+                        <div class="countdown" data-time="${boss.TargetTime}">Calculating...</div>
+                    </div>
+                `;
+            }
+            col.appendChild(card);
+        });
+
+        grid.appendChild(col);
+    });
 }
 
-/* --- Header & Controls --- */
-.top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 0;
-    border-bottom: 1px solid #222;
-    margin-bottom: 30px;
-}
+function updateTimers() {
+    const now = new Date(); 
+    const isTimerOn = document.getElementById('timer-toggle').checked;
+    const cards = document.querySelectorAll('.boss-card');
 
-.logo-text {
-    color: var(--accent-color);
-    margin: 0;
-    font-size: 24px;
-}
+    cards.forEach(card => {
+        const isMonarch = card.classList.contains('monarch-card');
+        const countdownEl = card.querySelector('.countdown');
+        const targetTimeStr = countdownEl.getAttribute('data-time');
+        
+        if (!targetTimeStr) return;
+        
+        const timeParts = targetTimeStr.split(':');
+        const targetHours = parseInt(timeParts, 10);
+        const targetMinutes = parseInt(timeParts, 10);
+        
+        const targetDate = new Date();
+        targetDate.setHours(targetHours, targetMinutes, 0, 0);
 
-.header-controls {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
+        card.classList.remove('dimmed');
+        countdownEl.classList.remove('spawning');
+        countdownEl.style.color = "";
 
-/* Color Picker */
-.color-picker {
-    display: flex;
-    gap: 8px;
-    background: #1a1a1a;
-    padding: 5px 10px;
-    border-radius: 20px;
-}
+        if (isMonarch) {
+            const killTimerEl = card.querySelector('.kill-timer');
+            let diffKill = now - targetDate;
+            if (diffKill < 0) diffKill = 0; 
+            
+            const killH = Math.floor(diffKill / (1000 * 60 * 60));
+            const killM = Math.floor((diffKill % (1000 * 60 * 60)) / (1000 * 60));
+            const killS = Math.floor((diffKill % (1000 * 60)) / 1000);
+            
+            killTimerEl.innerText = `${killH}h ${killM}m ${killS}s`;
 
-.color-dot {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: transform 0.2s;
-}
+            // 2.5 hour window calculation
+            const spawnDate = new Date(targetDate.getTime() + (2.5 * 60 * 60 * 1000));
+            const diffSpawn = spawnDate - now;
 
-.color-dot:hover {
-    transform: scale(1.2);
-}
+            if (diffSpawn > 0) {
+                const spawnH = Math.floor(diffSpawn / (1000 * 60 * 60));
+                const spawnM = Math.floor((diffSpawn % (1000 * 60 * 60)) / (1000 * 60));
+                const spawnS = Math.floor((diffSpawn % (1000 * 60)) / 1000);
 
-/* Toggle Switch */
-.toggle-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--text-muted);
-    font-size: 14px;
-}
+                const formattedM = spawnM.toString().padStart(2, '0');
+                const formattedS = spawnS.toString().padStart(2, '0');
 
-.switch {
-    position: relative;
-    display: inline-block;
-    width: 34px;
-    height: 18px;
-}
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #333;
-    transition: .4s;
-    border-radius: 34px;
-}
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 12px; width: 12px;
-    left: 3px; bottom: 3px;
-    background-color: white;
-    transition: .4s;
-    border-radius: 50%;
-}
-input:checked + .slider { background-color: var(--accent-color); }
-input:checked + .slider:before { transform: translateX(16px); }
+                countdownEl.innerText = spawnH > 0 
+                    ? `${spawnH}h ${formattedM}m ${formattedS}s` 
+                    : `${formattedM}m ${formattedS}s`;
+            } else {
+                // Changed "Spawning / Active" to "In Window"
+                countdownEl.innerText = `In Window`;
+                countdownEl.classList.add('spawning');
+            }
 
-.current-time {
-    color: var(--text-light);
-    font-size: 14px;
-    min-width: 60px;
-}
+        } else {
+            const diffMs = targetDate - now;
 
-/* --- Grid & Columns --- */
-.timers-grid {
-    display: flex;
-    gap: 20px;
-    align-items: flex-start;
-}
-
-.region-column {
-    flex: 1;
-    min-width: 320px;
-}
-
-.region-column h3 {
-    color: var(--text-muted);
-    text-transform: uppercase;
-    font-size: 14px;
-    margin-bottom: 15px;
-    font-weight: 500;
-}
-
-/* --- Boss Cards --- */
-.boss-card {
-    background-color: var(--card-bg);
-    border: 1px solid var(--accent-color);
-    border-radius: 4px;
-    padding: 15px;
-    margin-bottom: 15px;
-    border-left: 3px solid var(--accent-color); 
-}
-
-.boss-name {
-    font-weight: 600;
-    font-size: 15px;
-    margin: 0 0 5px 0;
-}
-
-.boss-time {
-    color: var(--text-muted);
-    font-size: 12px;
-    margin: 0 0 15px 0;
-}
-
-.countdown-wrapper {
-    background-color: var(--card-inner);
-    padding: 12px;
-    border-radius: 4px;
-    text-align: center;
-}
-
-.countdown {
-    color: var(--accent-color);
-    font-weight: bold;
-    font-size: 16px;
-}
-
-/* --- Dimmed State (For past spawns) --- */
-.boss-card.dimmed {
-    border: 1px solid #222;
-    border-left: 3px solid #333;
-    opacity: 0.4;
-}
-.boss-card.dimmed .countdown {
-    color: var(--text-muted);
+            if (diffMs > 0) {
+                if (isTimerOn) {
+                    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+                    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+                    
+                    const formattedM = minutes.toString().padStart(2, '0');
+                    const formattedS = seconds.toString().padStart(2, '0');
+                    
+                    countdownEl.innerText = hours > 0 
+                        ? `${hours}h ${formattedM}m ${formattedS}s` 
+                        : `${formattedM}m ${formattedS}s`;
+                } else {
+                    countdownEl.innerText = `Announcement in: ${targetTimeStr}`;
+                }
+            } else if (diffMs <= 0 && diffMs > -300000) { 
+                const spawnRemainingMs = 300000 + diffMs; 
+                const minutes = Math.floor((spawnRemainingMs % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((spawnRemainingMs % (1000 * 60)) / 1000);
+                
+                countdownEl.innerText = `Spawning in: ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+                countdownEl.classList.add('spawning');
+            } else {
+                countdownEl.innerText = `Spawned`;
+                card.classList.add('dimmed'); 
+            }
+        }
+    });
 }
