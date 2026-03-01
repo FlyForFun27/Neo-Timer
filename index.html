@@ -3,127 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neo Boss Timers V2 - Inspector</title>
-    <style>
-        body {
-            background-color: #121212;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding: 30px;
-        }
-        h1 { color: #9d4edd; }
-        .info-box {
-            background: #1e1e1e;
-            padding: 15px;
-            border-left: 4px solid #4cc9f0;
-            margin-bottom: 20px;
-            border-radius: 4px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #1e1e1e;
-            font-size: 0.9rem;
-        }
-        th, td {
-            border: 1px solid #333;
-            padding: 10px;
-            text-align: left;
-        }
-        th { background: #2a2a2a; color: #a0a0a0; }
-        .row-num { color: #FF6961; font-weight: bold; width: 40px; text-align: center; }
-        .empty-cell { color: #555; font-style: italic; }
-    </style>
+    <title>Neo Boss Timers</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body>
+    <header>
+        <h1 class="logo-text">Neo Boss Timers</h1>
+    </header>
 
-    <h1>V2 Data Inspector</h1>
-    <div class="info-box">
-        This page strips away all the timers and just shows us exactly what Google Sheets is outputting. Let's look closely at the "Monarch" rows to see if the Days or Times are shifted into the wrong columns!
-    </div>
+    <main class="dashboard-container">
+        <div id="timers-grid" class="timers-grid"></div>
+    </main>
 
-    <table>
-        <thead>
-            <tr>
-                <th class="row-num">Row</th>
-                <th>Col 0 (Region)</th>
-                <th>Col 1 (Name)</th>
-                <th>Col 2 (Day/Time?)</th>
-                <th>Col 3 (Time/Empty?)</th>
-                <th>Col 4 (Extra?)</th>
-            </tr>
-        </thead>
-        <tbody id="data-table">
-            <tr><td colspan="6">Loading data from Google Sheets...</td></tr>
-        </tbody>
-    </table>
-
-    <script>
-        const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv';
-
-        // A true, robust CSV parser (Handles quotes, hidden commas, and newlines safely)
-        function parseCSV(str) {
-            const arr = [];
-            let quote = false;
-            let row = 0, col = 0;
-            for (let c = 0; c < str.length; c++) {
-                let cc = str[c], nc = str[c+1];
-                arr[row] = arr[row] || [];
-                arr[row][col] = arr[row][col] || '';
-                if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
-                if (cc == '"') { quote = !quote; continue; }
-                if (cc == ',' && !quote) { ++col; continue; }
-                if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
-                if (cc == '\n' && !quote) { ++row; col = 0; continue; }
-                if (cc == '\r' && !quote) { ++row; col = 0; continue; }
-                arr[row][col] += cc;
-            }
-            return arr;
-        }
-
-        async function fetchAndInspect() {
-            try {
-                const response = await fetch(sheetUrl);
-                const csvText = await response.text();
-                
-                // Parse the CSV using our robust function
-                const rows = parseCSV(csvText);
-                
-                const tableBody = document.getElementById('data-table');
-                tableBody.innerHTML = ''; // clear loading text
-
-                // Skip the first row (headers) and loop through the rest
-                for (let i = 1; i < rows.length; i++) {
-                    const cols = rows[i];
-                    
-                    // Skip completely empty phantom rows from Google Sheets
-                    if (cols.length === 0 || (cols.length === 1 && cols.trim() === '')) continue;
-
-                    let tr = document.createElement('tr');
-                    
-                    // Row Number
-                    let html = `<td class="row-num">${i + 1}</td>`;
-                    
-                    // Print the first 5 columns exactly as they exist in the raw data
-                    for(let j = 0; j < 5; j++) {
-                        let cellData = cols[j];
-                        
-                        if (cellData === undefined || cellData === null || cellData.trim() === '') {
-                            html += `<td class="empty-cell">[Empty]</td>`;
-                        } else {
-                            html += `<td>${cellData.trim()}</td>`;
-                        }
-                    }
-
-                    tr.innerHTML = html;
-                    tableBody.appendChild(tr);
-                }
-            } catch (err) {
-                document.getElementById('data-table').innerHTML = `<tr><td colspan="6" style="color:red;">Error: ${err.message}</td></tr>`;
-            }
-        }
-
-        window.onload = fetchAndInspect;
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
