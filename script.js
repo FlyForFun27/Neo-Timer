@@ -272,6 +272,7 @@ function updateTimers(nowSec, activeOffset) {
         const regionName = card.dataset.region; 
         
         const spawnId = `${bName}_${targetSec}_${activeOffset}`;
+        let timeRemaining; // Added to track when to play the sound
 
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
@@ -284,41 +285,44 @@ function updateTimers(nowSec, activeOffset) {
             if (killTimerEl) killTimerEl.innerText = formatDuration(timeSinceKill * 1000);
             
             const spawnIn = 9000 - timeSinceKill; 
+            timeRemaining = spawnIn; // Store for audio check
+            
             if (spawnIn > 0) {
                 countdownEl.innerText = formatDuration(spawnIn * 1000);
                 card.dataset.priority = "1";
-                window.notifiedBosses.delete(spawnId); 
             } else {
                 countdownEl.innerText = `In Window`;
                 countdownEl.classList.add('spawning');
                 card.dataset.priority = "0";
-
-                if (isGlobalSoundOn && !mutedRegions.includes(regionName) && !window.notifiedBosses.has(spawnId)) {
-                    alertAudio.play().catch(e => console.log("Audio play blocked by browser."));
-                    window.notifiedBosses.add(spawnId);
-                }
             }
         } else {
             const diffSec = (targetSec + (86400 * activeOffset)) - nowSec;
+            timeRemaining = diffSec; // Store for audio check
 
             if (diffSec > 0) {
                 countdownEl.innerText = isTimerOn ? formatDuration(diffSec * 1000) : `Announcement at: ${card.dataset.targetTime}`;
                 card.dataset.priority = "1";
-                window.notifiedBosses.delete(spawnId); 
             } else if (diffSec <= 0 && diffSec > -300) { 
                 countdownEl.innerText = `Spawning in: ${formatDuration((300 + diffSec) * 1000)}`;
                 countdownEl.classList.add('spawning');
                 card.dataset.priority = "0";
-                
-                if (isGlobalSoundOn && !mutedRegions.includes(regionName) && !window.notifiedBosses.has(spawnId)) {
-                    alertAudio.play().catch(e => console.log("Audio play blocked by browser."));
-                    window.notifiedBosses.add(spawnId);
-                }
             } else {
                 countdownEl.innerText = `Spawned`;
                 card.classList.add('dimmed');
                 card.dataset.priority = "2";
             }
+        }
+
+        // --- NEW: INDEPENDENT AUDIO TRIGGER ---
+        // Play sound if 5 minutes (300s) or less remain
+        if (timeRemaining <= 300 && timeRemaining > -300) {
+            if (isGlobalSoundOn && !mutedRegions.includes(regionName) && !window.notifiedBosses.has(spawnId)) {
+                alertAudio.play().catch(e => console.log("Audio play blocked by browser."));
+                window.notifiedBosses.add(spawnId); // Mark as notified
+            }
+        } else if (timeRemaining > 300) {
+            // Reset the notification tracker ONLY if the timer is safely above 5 minutes
+            window.notifiedBosses.delete(spawnId);
         }
     });
 
