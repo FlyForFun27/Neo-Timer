@@ -6,7 +6,7 @@ window.currentDayOffset = null;
 window.notifiedBosses = new Set(); 
 
 // The Ping Sound 
-const alertAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); 
+const alertAudio = new Audio('SoundAlert.mp3');
 
 document.addEventListener("DOMContentLoaded", () => {
     // 1. Load Theme
