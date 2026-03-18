@@ -276,11 +276,12 @@ function updateTimers(nowSec, activeOffset) {
         const regionName = card.dataset.region; 
         
         const spawnId = `${bName}_${targetSec}_${activeOffset}`;
-        let timeRemaining; // Added to track when to play the sound
+        let timeRemaining; 
 
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
 
+        // --- NEW MONARCH MATH LOGIC ---
         if (isMonarch) {
             const killTimerEl = card.querySelector('.kill-timer');
             let timeSinceKill = nowSec - targetSec;
@@ -288,20 +289,31 @@ function updateTimers(nowSec, activeOffset) {
             
             if (killTimerEl) killTimerEl.innerText = formatDuration(timeSinceKill * 1000);
             
-            const spawnIn = 9000 - timeSinceKill; 
-            timeRemaining = spawnIn; // Store for audio check
+            // 7200 sec = 2 hours, 18000 sec = 5 hours
+            const spawnIn = 7200 - timeSinceKill; 
+            timeRemaining = spawnIn; 
             
             if (spawnIn > 0) {
+                // Counting down to the 2-hour mark
                 countdownEl.innerText = formatDuration(spawnIn * 1000);
                 card.dataset.priority = "1";
-            } else {
+            } else if (timeSinceKill <= 18000) { 
+                // Between 2h and 5h
                 countdownEl.innerText = `In Window`;
-                countdownEl.classList.add('spawning');
-                card.dataset.priority = "0";
+                countdownEl.classList.add('spawning'); // Turns it Red
+                card.dataset.priority = "0"; // Pushes to the top
+            } else { 
+                // Past 5h mark
+                countdownEl.innerText = `Missed`;
+                // REMOVED the dimmed class!
+                card.dataset.priority = "2"; // Sinks it to the bottom
+                timeRemaining = 999999; // Prevents audio from triggering
             }
+
+        // --- STANDARD BOSS LOGIC ---
         } else {
             const diffSec = (targetSec + (86400 * activeOffset)) - nowSec;
-            timeRemaining = diffSec; // Store for audio check
+            timeRemaining = diffSec; 
 
             if (diffSec > 0) {
                 countdownEl.innerText = isTimerOn ? formatDuration(diffSec * 1000) : `Announcement at: ${card.dataset.targetTime}`;
@@ -317,15 +329,13 @@ function updateTimers(nowSec, activeOffset) {
             }
         }
 
-        // --- NEW: INDEPENDENT AUDIO TRIGGER ---
-        // Play sound if 5 minutes (300s) or less remain
+        // --- AUDIO TRIGGER ---
         if (timeRemaining <= 300 && timeRemaining > -300) {
             if (isGlobalSoundOn && !mutedRegions.includes(regionName) && !window.notifiedBosses.has(spawnId)) {
                 alertAudio.play().catch(e => console.log("Audio play blocked by browser."));
-                window.notifiedBosses.add(spawnId); // Mark as notified
+                window.notifiedBosses.add(spawnId); 
             }
         } else if (timeRemaining > 300) {
-            // Reset the notification tracker ONLY if the timer is safely above 5 minutes
             window.notifiedBosses.delete(spawnId);
         }
     });
