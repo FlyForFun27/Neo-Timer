@@ -1,5 +1,12 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
+// --- DECOUPLED MONARCH SETTINGS ---
+const MONARCH_BOSSES = [
+    "Monarch CH 1",
+    "Monarch CH 2",
+    "Monarch CH 3",
+];
+
 // Global Variables
 window.globalCsvData = null;
 window.currentDayOffset = null;
@@ -86,7 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (testBtn) {
         testBtn.addEventListener('click', () => {
-            alertAudio.currentTime = 0; // Reset to start if already playing
+            alertAudio.currentTime = 0; 
             alertAudio.play().catch(e => console.log("Audio play blocked", e));
         });
     }
@@ -120,7 +127,13 @@ function populateSettings() {
     const list = document.getElementById('region-alert-list');
     if (!window.globalCsvData) return;
     
-    const regionNames = [...new Set(window.globalCsvData.map(b => b.Region))].filter(Boolean).sort();
+    const regionNames = [...new Set(window.globalCsvData.map(b => b.Region))]
+        .filter(Boolean)
+        .filter(r => r.toLowerCase() !== 'monarch')
+        .sort();
+        
+    regionNames.push("Monarch");
+
     let mutedRegions = JSON.parse(localStorage.getItem('neoTimerMutedRegions')) || [];
 
     list.innerHTML = regionNames.map(name => `
@@ -153,7 +166,6 @@ function tick() {
     if (!window.globalCsvData) return;
     const now = new Date();
     
-    // Adjust for Summer Time
     const savedDst = localStorage.getItem('neoTimerDST');
     if (savedDst === 'true') {
         now.setHours(now.getHours() - 1);
@@ -181,7 +193,7 @@ function getActiveDayOffset(data, nowSec, now) {
 
 // --- CLOCKS & RESETS ---
 function updateTopClock(now, nowSec) {
-    document.getElementById('top-clock').innerText = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    document.getElementById('top-clock').innerText = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: false });
     
     let dDiff = 21600 - nowSec; 
     if (dDiff <= 0) dDiff += 86400;
@@ -208,75 +220,101 @@ function buildDashboard(data, offset, now) {
     targetDate.setDate(targetDate.getDate() + offset);
     const displayDayStr = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(targetDate);
     const isTomorrow = offset > 0;
-    const trueTodayStr = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(now);
 
     const displayStandardBosses = data.filter(row => row.Weekday === displayDayStr && row.Region && row.Region.toLowerCase() !== 'monarch');
-    const trueTodayMonarchs = data.filter(row => row.Weekday === trueTodayStr && row.Region && row.Region.toLowerCase() === 'monarch');
-    
-    const combinedData = [...displayStandardBosses, ...trueTodayMonarchs];
-    const activeRegions = [...new Set(combinedData.map(row => row.Region))];
+    const activeRegions = [...new Set(displayStandardBosses.map(row => row.Region))];
 
     activeRegions.forEach(region => {
         const col = document.createElement('div');
         col.className = 'region-column';
         
-        const titleExtra = (isTomorrow && region.toLowerCase() !== 'monarch') 
-            ? ` <span style="font-size:10px; color:var(--accent-color);">(Tomorrow)</span>` 
-            : ``;
-
+        const titleExtra = isTomorrow ? ` <span style="font-size:10px; color:var(--accent-color);">(Tomorrow)</span>` : ``;
         col.innerHTML = `<h3>${region.toUpperCase()}${titleExtra}</h3><div class="card-container"></div>`;
         const container = col.querySelector('.card-container');
         
-        const regionBosses = combinedData.filter(row => row.Region === region);
+        const regionBosses = displayStandardBosses.filter(row => row.Region === region);
         
         regionBosses.forEach(boss => {
             const card = document.createElement('div');
-            card.className = 'boss-card';
-            
+            card.className = 'boss-card standard-card';
             card.dataset.targetSec = boss.TargetSec; 
             card.dataset.targetTime = boss.TargetTime;
             card.dataset.bossName = boss.BossName; 
             card.dataset.region = boss.Region; 
 
-            if (region.toLowerCase() === 'monarch') {
-                card.classList.add('monarch-card');
-                card.innerHTML = `
-                    <p class="boss-name">${boss.BossName}</p>
-                    <p class="time-since-kill">Time since kill: <span class="kill-timer">--</span></p>
-                    <div class="countdown-wrapper">
-                        <div class="estimated-label">ESTIMATED SPAWN IN</div>
-                        <div class="countdown">--</div>
-                    </div>`;
-            } else {
-                card.innerHTML = `
-                    <p class="boss-name">${boss.BossName}</p>
-                    <p class="boss-time">Time: ${boss.TargetTime}</p>
-                    <div class="countdown-wrapper"><div class="countdown">--</div></div>`;
-            }
+            card.innerHTML = `
+                <p class="boss-name">${boss.BossName}</p>
+                <p class="boss-time">Time: ${boss.TargetTime}</p>
+                <div class="countdown-wrapper"><div class="countdown">--</div></div>`;
             container.appendChild(card);
         });
 
-        if (region.toLowerCase() === 'monarch') {
-            const dropdown = document.createElement('details');
-            dropdown.className = 'monarch-dropdown';
-            const allMonarchs = data.filter(row => row.Region && row.Region.toLowerCase() === 'monarch');
-            const dayOrder = { "Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6, "Sunday":7 };
-            
-            allMonarchs.sort((a, b) => {
-                if (dayOrder[a.Weekday] !== dayOrder[b.Weekday]) return dayOrder[a.Weekday] - dayOrder[b.Weekday];
-                return a.TargetSec - b.TargetSec;
-            });
-
-            let listHTML = '';
-            allMonarchs.forEach(row => {
-                listHTML += `<div class="schedule-row"><span>${row.Weekday}, ${row.BossName}</span> <span>${row.TargetTime}</span></div>`;
-            });
-
-            dropdown.innerHTML = `<summary>View All Logged Times</summary><div class="schedule-list">${listHTML}</div>`;
-            col.appendChild(dropdown);
-        }
-
         grid.appendChild(col);
+    });
+
+    buildMonarchColumn(grid);
+}
+
+function buildMonarchColumn(grid) {
+    const col = document.createElement('div');
+    col.className = 'region-column';
+    // This is the line that was changed:
+    col.innerHTML = `<h3>MONARCHS <span style="font-size:10px; color:var(--accent-color);">(Server-Time)</span></h3><div class="card-container monarch-container"></div>`;
+    const container = col.querySelector('.card-container');
+
+    const savedKills = JSON.parse(localStorage.getItem('neoMonarchKills')) || {};
+
+    MONARCH_BOSSES.forEach(bossName => {
+        const card = document.createElement('div');
+        card.className = 'boss-card monarch-card';
+        card.dataset.bossName = bossName;
+        card.dataset.region = "Monarch"; 
+
+        const savedTime = savedKills[bossName] || "";
+
+        card.innerHTML = `
+            <p class="boss-name">${bossName}</p>
+            <div class="monarch-controls">
+                <span class="monarch-label">Last Kill Time:</span>
+                <input type="text" class="monarch-time-input" data-boss="${bossName}" value="${savedTime}" placeholder="HH:MM" maxlength="5">
+            </div>
+            <p class="time-since-kill">Time since kill: <span class="kill-timer">--</span></p>
+            <div class="countdown-wrapper">
+                <div class="estimated-label">ESTIMATED SPAWN IN</div>
+                <div class="countdown">--</div>
+            </div>`;
+        container.appendChild(card);
+    });
+
+    grid.appendChild(col);
+
+    document.querySelectorAll('.monarch-time-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const bName = e.target.dataset.boss;
+            const bTime = e.target.value.trim();
+            
+            if (bTime === "") {
+                let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills')) || {};
+                currentKills[bName] = "";
+                localStorage.setItem('neoMonarchKills', JSON.stringify(currentKills));
+                tick(); 
+                return;
+            }
+
+            const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+            if (!timeRegex.test(bTime)) {
+                alert("Please enter a valid 24h time (e.g., 08:30 or 14:45)");
+                const currentKills = JSON.parse(localStorage.getItem('neoMonarchKills')) || {};
+                e.target.value = currentKills[bName] || "";
+                return;
+            }
+            
+            let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills')) || {};
+            currentKills[bName] = bTime;
+            localStorage.setItem('neoMonarchKills', JSON.stringify(currentKills));
+            
+            tick(); 
+        });
     });
 }
 
@@ -289,8 +327,8 @@ function updateTimers(nowSec, activeOffset) {
     const isGlobalSoundOn = soundToggle ? soundToggle.checked : false;
     const mutedRegions = JSON.parse(localStorage.getItem('neoTimerMutedRegions')) || [];
 
-    document.querySelectorAll('.boss-card').forEach(card => {
-        const isMonarch = card.classList.contains('monarch-card');
+    // Update Standard Bosses
+    document.querySelectorAll('.standard-card').forEach(card => {
         const countdownEl = card.querySelector('.countdown');
         const targetSec = parseInt(card.dataset.targetSec, 10);
         const bName = card.dataset.bossName;
@@ -302,72 +340,111 @@ function updateTimers(nowSec, activeOffset) {
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
 
-        // --- NEW MONARCH MATH LOGIC ---
-        if (isMonarch) {
-            const killTimerEl = card.querySelector('.kill-timer');
-            let timeSinceKill = nowSec - targetSec;
-            if (timeSinceKill < 0) timeSinceKill += 86400; 
-            
-            if (killTimerEl) killTimerEl.innerText = formatDuration(timeSinceKill * 1000);
-            
-            // 7200 sec = 2 hours, 18000 sec = 5 hours
-            const spawnIn = 7200 - timeSinceKill; 
-            timeRemaining = spawnIn; 
-            
-            if (spawnIn > 0) {
-                // Counting down to the 2-hour mark
-                countdownEl.innerText = formatDuration(spawnIn * 1000);
-                card.dataset.priority = "1";
-            } else if (timeSinceKill <= 18000) { 
-                // Between 2h and 5h
-                countdownEl.innerText = `In Window`;
-                countdownEl.classList.add('spawning'); // Turns it Red
-                card.dataset.priority = "0"; // Pushes to the top
-            } else { 
-                // Past 5h mark
-                countdownEl.innerText = `Missed`;
-                card.dataset.priority = "2"; // Sinks it to the bottom
-                timeRemaining = 999999; // Prevents audio from triggering
-            }
+        const diffSec = (targetSec + (86400 * activeOffset)) - nowSec;
+        timeRemaining = diffSec; 
 
-        // --- STANDARD BOSS LOGIC ---
+        if (diffSec > 0) {
+            countdownEl.innerText = isTimerOn ? formatDuration(diffSec * 1000) : `Announcement at: ${card.dataset.targetTime}`;
+            card.dataset.priority = "1";
+        } else if (diffSec <= 0 && diffSec > -300) { 
+            countdownEl.innerText = `Spawning in: ${formatDuration((300 + diffSec) * 1000)}`;
+            countdownEl.classList.add('spawning');
+            card.dataset.priority = "0";
         } else {
-            const diffSec = (targetSec + (86400 * activeOffset)) - nowSec;
-            timeRemaining = diffSec; 
-
-            if (diffSec > 0) {
-                countdownEl.innerText = isTimerOn ? formatDuration(diffSec * 1000) : `Announcement at: ${card.dataset.targetTime}`;
-                card.dataset.priority = "1";
-            } else if (diffSec <= 0 && diffSec > -300) { 
-                countdownEl.innerText = `Spawning in: ${formatDuration((300 + diffSec) * 1000)}`;
-                countdownEl.classList.add('spawning');
-                card.dataset.priority = "0";
-            } else {
-                countdownEl.innerText = `Spawned`;
-                card.classList.add('dimmed');
-                card.dataset.priority = "2";
-            }
+            countdownEl.innerText = `Spawned`;
+            card.classList.add('dimmed');
+            card.dataset.priority = "2";
         }
 
-        // --- AUDIO TRIGGER ---
-        if (timeRemaining <= 300 && timeRemaining > -300) {
-            if (isGlobalSoundOn && !mutedRegions.includes(regionName) && !window.notifiedBosses.has(spawnId)) {
-                alertAudio.play().catch(e => console.log("Audio play blocked by browser."));
-                window.notifiedBosses.add(spawnId); 
-            }
-        } else if (timeRemaining > 300) {
-            window.notifiedBosses.delete(spawnId);
-        }
+        handleAudio(timeRemaining, isGlobalSoundOn, mutedRegions, regionName, spawnId);
     });
 
+    // Update Monarch Bosses
+    document.querySelectorAll('.monarch-card').forEach(card => {
+        const countdownEl = card.querySelector('.countdown');
+        const killTimerEl = card.querySelector('.kill-timer');
+        const inputEl = card.querySelector('.monarch-time-input');
+        const bName = card.dataset.bossName;
+        
+        const killTimeStr = inputEl.value;
+        const spawnId = `Monarch_${bName}`;
+        
+        card.classList.remove('dimmed');
+        countdownEl.classList.remove('spawning');
+
+        if (!killTimeStr) {
+            killTimerEl.innerText = "--";
+            countdownEl.innerText = "Awaiting Time";
+            card.dataset.priority = "3";
+            return;
+        }
+
+        const [kh, km] = killTimeStr.split(':').map(Number);
+        const killSec = (kh * 3600) + (km * 60);
+
+        let timeSinceKill = nowSec - killSec;
+        if (timeSinceKill < 0) timeSinceKill += 86400; 
+
+        killTimerEl.innerText = formatDuration(timeSinceKill * 1000);
+        
+        const spawnIn = 7200 - timeSinceKill; 
+        let timeRemaining = spawnIn;
+
+        if (spawnIn > 0) {
+            countdownEl.innerText = formatDuration(spawnIn * 1000);
+            card.dataset.priority = "1";
+        } else if (timeSinceKill <= 18000) { 
+            countdownEl.innerText = `In Window`;
+            countdownEl.classList.add('spawning'); 
+            card.dataset.priority = "0"; 
+        } else { 
+            countdownEl.innerText = `Missed Window`;
+            card.dataset.priority = "2"; 
+            timeRemaining = 999999; 
+        }
+
+        handleAudio(timeRemaining, isGlobalSoundOn, mutedRegions, "Monarch", spawnId);
+    });
+
+    // Sort Containers based on priority (WITH SMART SORT FIX)
     document.querySelectorAll('.card-container').forEach(container => {
         const cards = Array.from(container.children);
+        const originalOrder = [...cards];
+
         cards.sort((a, b) => {
-            if (a.dataset.priority !== b.dataset.priority) return a.dataset.priority - b.dataset.priority;
-            return parseInt(a.dataset.targetSec) - parseInt(b.dataset.targetSec);
+            const priorityA = parseInt(a.dataset.priority || "9");
+            const priorityB = parseInt(b.dataset.priority || "9");
+            
+            if (priorityA !== priorityB) return priorityA - priorityB;
+            
+            const tA = parseInt(a.dataset.targetSec || "0");
+            const tB = parseInt(b.dataset.targetSec || "0");
+            return tA - tB;
         });
-        cards.forEach(card => container.appendChild(card));
+
+        let orderChanged = false;
+        for (let i = 0; i < cards.length; i++) {
+            if (cards[i] !== originalOrder[i]) {
+                orderChanged = true;
+                break;
+            }
+        }
+
+        if (orderChanged) {
+            cards.forEach(card => container.appendChild(card));
+        }
     });
+}
+
+function handleAudio(timeRemaining, isGlobalSoundOn, mutedRegions, regionName, spawnId) {
+    if (timeRemaining <= 300 && timeRemaining > -300) {
+        if (isGlobalSoundOn && !mutedRegions.includes(regionName) && !window.notifiedBosses.has(spawnId)) {
+            alertAudio.play().catch(e => console.log("Audio play blocked by browser."));
+            window.notifiedBosses.add(spawnId); 
+        }
+    } else if (timeRemaining > 300) {
+        window.notifiedBosses.delete(spawnId);
+    }
 }
 
 function formatDuration(ms) {
