@@ -1,6 +1,6 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
-// --- DECOUPLED MONARCH SETTINGS ---
+// --- MONARCH SETTINGS ---
 const MONARCH_BOSSES = [
     "Monarch CH 1",
     "Monarch CH 2",
@@ -47,19 +47,25 @@ document.addEventListener("DOMContentLoaded", () => {
         soundToggle.addEventListener('change', (e) => localStorage.setItem('neoTimerSoundState', e.target.checked));
     }
 
-    // 5. Load Summer Time (DST) Toggle
-    const dstToggle = document.getElementById('dst-toggle');
-    const savedDst = localStorage.getItem('neoTimerDST');
-    if (dstToggle) {
-        if (savedDst !== null) dstToggle.checked = savedDst === 'true';
-        dstToggle.addEventListener('change', (e) => {
-            localStorage.setItem('neoTimerDST', e.target.checked);
+    // 5. Load Server Region
+    const savedRegion = localStorage.getItem('neoTimerRegion') || 'EU';
+    document.querySelectorAll('.region-btn').forEach(btn => {
+        if (btn.dataset.region === savedRegion) btn.classList.add('active');
+        
+        btn.addEventListener('click', (e) => {
+            // Remove active class from all buttons
+            document.querySelectorAll('.region-btn').forEach(b => b.classList.remove('active'));
+            // Add active class to clicked button
+            e.target.classList.add('active');
+            
+            // Save and re-tick
+            localStorage.setItem('neoTimerRegion', e.target.dataset.region);
             if (window.globalCsvData) {
                 window.currentDayOffset = null; // Force UI rebuild
                 tick(); 
             }
         });
-    }
+    });
 
     // 6. Color Picker
     document.querySelectorAll('.color-dot').forEach(dot => {
@@ -164,12 +170,18 @@ function populateSettings() {
 // --- THE MASTER ENGINE ---
 function tick() {
     if (!window.globalCsvData) return;
-    const now = new Date();
     
-    const savedDst = localStorage.getItem('neoTimerDST');
-    if (savedDst === 'true') {
-        now.setHours(now.getHours() - 1);
-    }
+    // Server Region UTC Logic
+    const savedRegion = localStorage.getItem('neoTimerRegion') || 'EU';
+    let offsetHours = 1; // Default EU (UTC+1)
+    if (savedRegion === 'NA') offsetHours = -6; // NA (UTC-6)
+    else if (savedRegion === 'TW') offsetHours = 8; // TW (UTC+8)
+
+    const localNow = new Date();
+    // Convert local time back to strict UTC
+    const utcMs = localNow.getTime() + (localNow.getTimezoneOffset() * 60000);
+    // Apply the specific server's UTC offset
+    const now = new Date(utcMs + (offsetHours * 3600000));
 
     const nowSec = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
 
@@ -258,7 +270,6 @@ function buildDashboard(data, offset, now) {
 function buildMonarchColumn(grid) {
     const col = document.createElement('div');
     col.className = 'region-column';
-    // This is the line that was changed:
     col.innerHTML = `<h3>MONARCHS <span style="font-size:10px; color:var(--accent-color);">(Server-Time)</span></h3><div class="card-container monarch-container"></div>`;
     const container = col.querySelector('.card-container');
 
