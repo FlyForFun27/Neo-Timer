@@ -1,5 +1,8 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
+// Paste your Google Apps Script Web App URL here
+const WEB_APP_URL = "YOUR_WEB_APP_URL_HERE"; 
+
 // --- DECOUPLED MONARCH SETTINGS ---
 const MONARCH_BOSSES = [
     "Monarch CH 1",
@@ -11,6 +14,7 @@ const MONARCH_BOSSES = [
 window.globalCsvData = null;
 window.currentDayOffset = null;
 window.notifiedBosses = new Set(); 
+window.communityMonarchKills = {}; // Stores fetched averages
 
 // The Ping Sound 
 const alertAudio = new Audio('SoundAlert.mp3');
@@ -72,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
         timeFormatToggle.addEventListener('change', (e) => {
             localStorage.setItem('neoTimer12Hour', e.target.checked);
             if (window.globalCsvData) {
-                window.currentDayOffset = null; // Force UI rebuild to update card times
+                window.currentDayOffset = null; 
                 tick(); 
             }
         });
@@ -125,7 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target === modal) modal.style.display = 'none';
     });
 
-    // Fetch Data
+    // Fetch Main Data
     Papa.parse(sheetUrl, {
         download: true,
         header: true,
@@ -137,7 +141,32 @@ document.addEventListener("DOMContentLoaded", () => {
             tick(); 
         }
     });
+
+    // Fetch Community Monarch Times
+    if (WEB_APP_URL !== "YOUR_WEB_APP_URL_HERE") {
+        fetchCommunityMonarchs();
+        setInterval(fetchCommunityMonarchs, 60000); // Re-fetch every 60 seconds
+    }
 });
+
+function fetchCommunityMonarchs() {
+    fetch(WEB_APP_URL)
+        .then(response => response.json())
+        .then(data => {
+            window.communityMonarchKills = data;
+            if (window.globalCsvData) tick(); // Force refresh with new data
+        })
+        .catch(err => console.error("Error fetching community times:", err));
+}
+
+function submitMonarchTime(region, boss, timeStr) {
+    if (WEB_APP_URL === "YOUR_WEB_APP_URL_HERE") return;
+    
+    fetch(WEB_APP_URL, {
+        method: 'POST',
+        body: JSON.stringify({ region: region, boss: boss, time: timeStr })
+    }).catch(err => console.error("Error submitting time:", err));
+}
 
 // --- SETTINGS POPULATOR (REGIONS) ---
 function populateSettings() {
@@ -182,16 +211,13 @@ function populateSettings() {
 function tick() {
     if (!window.globalCsvData) return;
     
-    // Server Region UTC Logic
     const savedRegion = localStorage.getItem('neoTimerRegion') || 'EU';
-    let offsetHours = 1; // Default EU (UTC+1)
-    if (savedRegion === 'NA') offsetHours = -6; // NA (UTC-6)
-    else if (savedRegion === 'TW') offsetHours = 8; // TW (UTC+8)
+    let offsetHours = 1; 
+    if (savedRegion === 'NA') offsetHours = -6; 
+    else if (savedRegion === 'TW') offsetHours = 8; 
 
     const localNow = new Date();
-    // Convert local time back to strict UTC
     const utcMs = localNow.getTime() + (localNow.getTimezoneOffset() * 60000);
-    // Apply the specific server's UTC offset
     const now = new Date(utcMs + (offsetHours * 3600000));
 
     const nowSec = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
@@ -200,11 +226,11 @@ function tick() {
 
     if (window.currentDayOffset !== activeOffset) {
         window.currentDayOffset = activeOffset;
-        buildDashboard(window.globalCsvData, activeOffset, now);
+        buildDashboard(window.globalCsvData, activeOffset, now, savedRegion);
     }
 
     updateTopClock(now, nowSec, savedRegion);
-    updateTimers(nowSec, activeOffset);
+    updateTimers(nowSec, activeOffset, savedRegion);
 }
 
 function getActiveDayOffset(data, nowSec, now) {
@@ -237,7 +263,7 @@ function updateTopClock(now, nowSec, region) {
 }
 
 // --- UI BUILDER ---
-function buildDashboard(data, offset, now) {
+function buildDashboard(data, offset, now, currentRegion) {
     const grid = document.getElementById('timers-grid');
     grid.innerHTML = ''; 
     
@@ -268,7 +294,6 @@ function buildDashboard(data, offset, now) {
             card.dataset.bossName = boss.BossName; 
             card.dataset.region = boss.Region; 
 
-            // Format standard boss time based on toggle
             const tSec = parseInt(boss.TargetSec, 10);
             let displayTime = boss.TargetTime;
             if (!isNaN(tSec)) {
@@ -294,16 +319,14 @@ function buildDashboard(data, offset, now) {
         grid.appendChild(col);
     });
 
-    buildMonarchColumn(grid);
+    buildMonarchColumn(grid, currentRegion);
 }
 
-function buildMonarchColumn(grid) {
+function buildMonarchColumn(grid, currentRegion) {
     const col = document.createElement('div');
     col.className = 'region-column';
     col.innerHTML = `<h3>MONARCHS <span style="font-size:10px; color:var(--accent-color);">(Server-Time)</span></h3><div class="card-container monarch-container"></div>`;
     const container = col.querySelector('.card-container');
-
-    const savedKills = JSON.parse(localStorage.getItem('neoMonarchKills')) || {};
 
     MONARCH_BOSSES.forEach(bossName => {
         const card = document.createElement('div');
@@ -311,15 +334,22 @@ function buildMonarchColumn(grid) {
         card.dataset.bossName = bossName;
         card.dataset.region = "Monarch"; 
 
-        const savedTime = savedKills[bossName] || "";
+        // Prefer community time over local storage
+        let displayTime = "";
+        if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bossName]) {
+            displayTime = window.communityMonarchKills[currentRegion][bossName];
+        } else {
+            const localKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + currentRegion)) || {};
+            displayTime = localKills[bossName] || "";
+        }
 
         card.innerHTML = `
             <p class="boss-name">${bossName}</p>
             <div class="monarch-controls">
-                <span class="monarch-label">Last Kill Time:</span>
-                <input type="text" class="monarch-time-input" data-boss="${bossName}" value="${savedTime}" placeholder="HH:MM" maxlength="5">
+                <span class="monarch-label">Last Announcement Time:</span>
+                <input type="text" class="monarch-time-input" data-boss="${bossName}" value="${displayTime}" placeholder="HH:MM" maxlength="5">
             </div>
-            <p class="time-since-kill">Time since kill: <span class="kill-timer">--</span></p>
+            <p class="time-since-kill">Time since last Announcement: <span class="kill-timer">--</span></p>
             <div class="countdown-wrapper">
                 <div class="estimated-label">ESTIMATED SPAWN IN</div>
                 <div class="countdown">--</div>
@@ -333,11 +363,12 @@ function buildMonarchColumn(grid) {
         input.addEventListener('change', (e) => {
             const bName = e.target.dataset.boss;
             const bTime = e.target.value.trim();
+            const reg = localStorage.getItem('neoTimerRegion') || 'EU';
             
             if (bTime === "") {
-                let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills')) || {};
+                let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
                 currentKills[bName] = "";
-                localStorage.setItem('neoMonarchKills', JSON.stringify(currentKills));
+                localStorage.setItem('neoMonarchKills_' + reg, JSON.stringify(currentKills));
                 tick(); 
                 return;
             }
@@ -345,14 +376,18 @@ function buildMonarchColumn(grid) {
             const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
             if (!timeRegex.test(bTime)) {
                 alert("Please enter a valid 24h time (e.g., 08:30 or 14:45)");
-                const currentKills = JSON.parse(localStorage.getItem('neoMonarchKills')) || {};
+                const currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
                 e.target.value = currentKills[bName] || "";
                 return;
             }
             
-            let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills')) || {};
+            // Save to LocalStorage specifically for this region
+            let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
             currentKills[bName] = bTime;
-            localStorage.setItem('neoMonarchKills', JSON.stringify(currentKills));
+            localStorage.setItem('neoMonarchKills_' + reg, JSON.stringify(currentKills));
+            
+            // Post to backend
+            submitMonarchTime(reg, bName, bTime);
             
             tick(); 
         });
@@ -360,7 +395,7 @@ function buildMonarchColumn(grid) {
 }
 
 // --- TIMER MATH & ALERTS ---
-function updateTimers(nowSec, activeOffset) {
+function updateTimers(nowSec, activeOffset, currentRegion) {
     const timerToggle = document.getElementById('timer-toggle');
     const isTimerOn = timerToggle ? timerToggle.checked : true;
     
@@ -368,7 +403,6 @@ function updateTimers(nowSec, activeOffset) {
     const isGlobalSoundOn = soundToggle ? soundToggle.checked : false;
     const mutedRegions = JSON.parse(localStorage.getItem('neoTimerMutedRegions')) || [];
 
-    // Update Standard Bosses
     document.querySelectorAll('.standard-card').forEach(card => {
         const countdownEl = card.querySelector('.countdown');
         const targetSec = parseInt(card.dataset.targetSec, 10);
@@ -400,12 +434,18 @@ function updateTimers(nowSec, activeOffset) {
         handleAudio(timeRemaining, isGlobalSoundOn, mutedRegions, regionName, spawnId);
     });
 
-    // Update Monarch Bosses
     document.querySelectorAll('.monarch-card').forEach(card => {
         const countdownEl = card.querySelector('.countdown');
         const killTimerEl = card.querySelector('.kill-timer');
         const inputEl = card.querySelector('.monarch-time-input');
         const bName = card.dataset.bossName;
+        
+        // Refresh input display silently if community fetch updated it
+        if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bName]) {
+            if (document.activeElement !== inputEl) { // Don't overwrite if user is actively typing
+                inputEl.value = window.communityMonarchKills[currentRegion][bName];
+            }
+        }
         
         const killTimeStr = inputEl.value;
         const spawnId = `Monarch_${bName}`;
@@ -447,7 +487,6 @@ function updateTimers(nowSec, activeOffset) {
         handleAudio(timeRemaining, isGlobalSoundOn, mutedRegions, "Monarch", spawnId);
     });
 
-    // Sort Containers based on priority (WITH SMART SORT FIX)
     document.querySelectorAll('.card-container').forEach(container => {
         const cards = Array.from(container.children);
         const originalOrder = [...cards];
