@@ -64,7 +64,21 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 6. Color Picker
+    // 6. Load 12-Hour Format Toggle
+    const timeFormatToggle = document.getElementById('time-format-toggle');
+    const savedTimeFormat = localStorage.getItem('neoTimer12Hour');
+    if (timeFormatToggle) {
+        if (savedTimeFormat !== null) timeFormatToggle.checked = savedTimeFormat === 'true';
+        timeFormatToggle.addEventListener('change', (e) => {
+            localStorage.setItem('neoTimer12Hour', e.target.checked);
+            if (window.globalCsvData) {
+                window.currentDayOffset = null; // Force UI rebuild to update card times
+                tick(); 
+            }
+        });
+    }
+
+    // 7. Color Picker
     document.querySelectorAll('.color-dot').forEach(dot => {
         dot.addEventListener('click', (e) => {
             const selectedColor = e.target.getAttribute('data-color');
@@ -73,7 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 7. Setup Settings Modal & Volume Slider
+    // 8. Setup Settings Modal & Volume Slider
     const modal = document.getElementById('settings-modal');
     const cog = document.getElementById('settings-btn');
     const closeBtn = document.querySelector('.close-modal');
@@ -202,7 +216,8 @@ function getActiveDayOffset(data, nowSec, now) {
 
 // --- CLOCKS & RESETS ---
 function updateTopClock(now, nowSec, region) {
-    const timeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: false });
+    const is12Hour = localStorage.getItem('neoTimer12Hour') === 'true';
+    const timeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: is12Hour });
     document.getElementById('top-clock').innerText = `${region} | ${timeStr}`;
     
     let dDiff = 21600 - nowSec; 
@@ -230,6 +245,7 @@ function buildDashboard(data, offset, now) {
     targetDate.setDate(targetDate.getDate() + offset);
     const displayDayStr = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(targetDate);
     const isTomorrow = offset > 0;
+    const is12Hour = localStorage.getItem('neoTimer12Hour') === 'true';
 
     const displayStandardBosses = data.filter(row => row.Weekday === displayDayStr && row.Region && row.Region.toLowerCase() !== 'monarch');
     const activeRegions = [...new Set(displayStandardBosses.map(row => row.Region))];
@@ -252,9 +268,25 @@ function buildDashboard(data, offset, now) {
             card.dataset.bossName = boss.BossName; 
             card.dataset.region = boss.Region; 
 
+            // Format standard boss time based on toggle
+            const tSec = parseInt(boss.TargetSec, 10);
+            let displayTime = boss.TargetTime;
+            if (!isNaN(tSec)) {
+                const h = Math.floor(tSec / 3600);
+                const m = Math.floor((tSec % 3600) / 60);
+                if (is12Hour) {
+                    const ampm = h >= 12 ? 'PM' : 'AM';
+                    const h12 = h % 12 || 12;
+                    displayTime = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+                } else {
+                    displayTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                }
+            }
+            card.dataset.displayTime = displayTime;
+
             card.innerHTML = `
                 <p class="boss-name">${boss.BossName}</p>
-                <p class="boss-time">Time: ${boss.TargetTime}</p>
+                <p class="boss-time">Time: ${displayTime}</p>
                 <div class="countdown-wrapper"><div class="countdown">--</div></div>`;
             container.appendChild(card);
         });
@@ -353,7 +385,7 @@ function updateTimers(nowSec, activeOffset) {
         timeRemaining = diffSec; 
 
         if (diffSec > 0) {
-            countdownEl.innerText = isTimerOn ? formatDuration(diffSec * 1000) : `Announcement at: ${card.dataset.targetTime}`;
+            countdownEl.innerText = isTimerOn ? formatDuration(diffSec * 1000) : `Announcement at: ${card.dataset.displayTime}`;
             card.dataset.priority = "1";
         } else if (diffSec <= 0 && diffSec > -300) { 
             countdownEl.innerText = `Spawning in: ${formatDuration((300 + diffSec) * 1000)}`;
@@ -415,7 +447,7 @@ function updateTimers(nowSec, activeOffset) {
         handleAudio(timeRemaining, isGlobalSoundOn, mutedRegions, "Monarch", spawnId);
     });
 
-    // Sort Containers based on priority
+    // Sort Containers based on priority (WITH SMART SORT FIX)
     document.querySelectorAll('.card-container').forEach(container => {
         const cards = Array.from(container.children);
         const originalOrder = [...cards];
