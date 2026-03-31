@@ -376,3 +376,32 @@ input:checked + .slider:before { transform: translateX(16px); }
     background-color: var(--accent-color);
     color: var(--bg-dark);
 }
+
+/* --- Region Buttons --- */
+.region-btn-group {
+    display: flex;
+    gap: 5px;
+}
+
+.region-btn {
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid #333;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.region-btn:hover {
+    border-color: var(--text-light);
+    color: var(--text-light);
+}
+
+.region-btn.active {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+    color: var(--bg-dark);
+}
