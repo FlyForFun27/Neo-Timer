@@ -1,6 +1,6 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
-// --- MONARCH SETTINGS ---
+// --- DECOUPLED MONARCH SETTINGS ---
 const MONARCH_BOSSES = [
     "Monarch CH 1",
     "Monarch CH 2",
@@ -53,15 +53,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (btn.dataset.region === savedRegion) btn.classList.add('active');
         
         btn.addEventListener('click', (e) => {
-            // Remove active class from all buttons
             document.querySelectorAll('.region-btn').forEach(b => b.classList.remove('active'));
-            // Add active class to clicked button
             e.target.classList.add('active');
             
-            // Save and re-tick
             localStorage.setItem('neoTimerRegion', e.target.dataset.region);
             if (window.globalCsvData) {
-                window.currentDayOffset = null; // Force UI rebuild
+                window.currentDayOffset = null; 
                 tick(); 
             }
         });
@@ -192,7 +189,7 @@ function tick() {
         buildDashboard(window.globalCsvData, activeOffset, now);
     }
 
-    updateTopClock(now, nowSec);
+    updateTopClock(now, nowSec, savedRegion);
     updateTimers(nowSec, activeOffset);
 }
 
@@ -204,8 +201,9 @@ function getActiveDayOffset(data, nowSec, now) {
 }
 
 // --- CLOCKS & RESETS ---
-function updateTopClock(now, nowSec) {
-    document.getElementById('top-clock').innerText = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: false });
+function updateTopClock(now, nowSec, region) {
+    const timeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: false });
+    document.getElementById('top-clock').innerText = `${region} | ${timeStr}`;
     
     let dDiff = 21600 - nowSec; 
     if (dDiff <= 0) dDiff += 86400;
@@ -417,7 +415,7 @@ function updateTimers(nowSec, activeOffset) {
         handleAudio(timeRemaining, isGlobalSoundOn, mutedRegions, "Monarch", spawnId);
     });
 
-    // Sort Containers based on priority (WITH SMART SORT FIX)
+    // Sort Containers based on priority
     document.querySelectorAll('.card-container').forEach(container => {
         const cards = Array.from(container.children);
         const originalOrder = [...cards];
