@@ -14,7 +14,7 @@ const MONARCH_BOSSES = [
 window.globalCsvData = null;
 window.currentDayOffset = null;
 window.notifiedBosses = new Set(); 
-window.communityMonarchKills = {}; // Stores fetched averages
+window.communityMonarchKills = {}; 
 
 // The Ping Sound 
 const alertAudio = new Audio('SoundAlert.mp3');
@@ -145,7 +145,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Fetch Community Monarch Times
     if (WEB_APP_URL !== "YOUR_WEB_APP_URL_HERE") {
         fetchCommunityMonarchs();
-        setInterval(fetchCommunityMonarchs, 60000); // Re-fetch every 60 seconds
+        setInterval(fetchCommunityMonarchs, 60000); 
     }
 });
 
@@ -154,7 +154,7 @@ function fetchCommunityMonarchs() {
         .then(response => response.json())
         .then(data => {
             window.communityMonarchKills = data;
-            if (window.globalCsvData) tick(); // Force refresh with new data
+            if (window.globalCsvData) tick(); 
         })
         .catch(err => console.error("Error fetching community times:", err));
 }
@@ -181,29 +181,52 @@ function populateSettings() {
     regionNames.push("Monarch");
 
     let mutedRegions = JSON.parse(localStorage.getItem('neoTimerMutedRegions')) || [];
+    let hiddenRegions = JSON.parse(localStorage.getItem('neoTimerHiddenRegions')) || [];
 
     list.innerHTML = regionNames.map(name => `
         <div class="boss-alert-item">
             <span class="boss-alert-name">${name}</span>
-            <label class="switch">
-                <input type="checkbox" data-region="${name}" ${mutedRegions.includes(name) ? '' : 'checked'} class="region-mute-toggle">
-                <span class="slider round"></span>
-            </label>
+            <div style="display: flex; gap: 20px; padding-right: 5px;">
+                <label class="switch" title="Toggle Visibility">
+                    <input type="checkbox" data-region="${name}" data-type="visible" ${hiddenRegions.includes(name) ? '' : 'checked'} class="region-setting-toggle">
+                    <span class="slider round"></span>
+                </label>
+                <label class="switch" title="Toggle Sound">
+                    <input type="checkbox" data-region="${name}" data-type="sound" ${mutedRegions.includes(name) ? '' : 'checked'} class="region-setting-toggle">
+                    <span class="slider round"></span>
+                </label>
+            </div>
         </div>
     `).join('');
 
-    document.querySelectorAll('.region-mute-toggle').forEach(toggle => {
+    document.querySelectorAll('.region-setting-toggle').forEach(toggle => {
         toggle.addEventListener('change', (e) => {
             const rName = e.target.dataset.region;
-            let currentMuted = JSON.parse(localStorage.getItem('neoTimerMutedRegions')) || [];
+            const type = e.target.dataset.type;
+            const storageKey = type === 'sound' ? 'neoTimerMutedRegions' : 'neoTimerHiddenRegions';
+            
+            let currentList = JSON.parse(localStorage.getItem(storageKey)) || [];
             
             if (e.target.checked) {
-                currentMuted = currentMuted.filter(n => n !== rName);
+                currentList = currentList.filter(n => n !== rName);
             } else {
-                if (!currentMuted.includes(rName)) currentMuted.push(rName);
+                if (!currentList.includes(rName)) currentList.push(rName);
             }
-            localStorage.setItem('neoTimerMutedRegions', JSON.stringify(currentMuted));
+            localStorage.setItem(storageKey, JSON.stringify(currentList));
+            
+            if (type === 'visible') applyVisibility();
         });
+    });
+}
+
+function applyVisibility() {
+    const hiddenRegions = JSON.parse(localStorage.getItem('neoTimerHiddenRegions')) || [];
+    document.querySelectorAll('.region-column').forEach(col => {
+        if (hiddenRegions.includes(col.dataset.regionColumn)) {
+            col.style.display = 'none';
+        } else {
+            col.style.display = 'block';
+        }
     });
 }
 
@@ -279,6 +302,7 @@ function buildDashboard(data, offset, now, currentRegion) {
     activeRegions.forEach(region => {
         const col = document.createElement('div');
         col.className = 'region-column';
+        col.dataset.regionColumn = region;
         
         const titleExtra = isTomorrow ? ` <span style="font-size:10px; color:var(--accent-color);">(Tomorrow)</span>` : ``;
         col.innerHTML = `<h3>${region.toUpperCase()}${titleExtra}</h3><div class="card-container"></div>`;
@@ -320,11 +344,13 @@ function buildDashboard(data, offset, now, currentRegion) {
     });
 
     buildMonarchColumn(grid, currentRegion);
+    applyVisibility(); 
 }
 
 function buildMonarchColumn(grid, currentRegion) {
     const col = document.createElement('div');
     col.className = 'region-column';
+    col.dataset.regionColumn = "Monarch";
     col.innerHTML = `<h3>MONARCHS <span style="font-size:10px; color:var(--accent-color);">(Server-Time)</span></h3><div class="card-container monarch-container"></div>`;
     const container = col.querySelector('.card-container');
 
@@ -334,7 +360,6 @@ function buildMonarchColumn(grid, currentRegion) {
         card.dataset.bossName = bossName;
         card.dataset.region = "Monarch"; 
 
-        // Prefer community time over local storage
         let displayTime = "";
         if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bossName]) {
             displayTime = window.communityMonarchKills[currentRegion][bossName];
@@ -381,12 +406,10 @@ function buildMonarchColumn(grid, currentRegion) {
                 return;
             }
             
-            // Save to LocalStorage specifically for this region
             let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
             currentKills[bName] = bTime;
             localStorage.setItem('neoMonarchKills_' + reg, JSON.stringify(currentKills));
             
-            // Post to backend
             submitMonarchTime(reg, bName, bTime);
             
             tick(); 
@@ -440,9 +463,8 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
         const inputEl = card.querySelector('.monarch-time-input');
         const bName = card.dataset.bossName;
         
-        // Refresh input display silently if community fetch updated it
         if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bName]) {
-            if (document.activeElement !== inputEl) { // Don't overwrite if user is actively typing
+            if (document.activeElement !== inputEl) { 
                 inputEl.value = window.communityMonarchKills[currentRegion][bName];
             }
         }
