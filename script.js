@@ -1,6 +1,6 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
-// Paste your Google Apps Script Web App URL here
+// Connected Web App URL
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzxRardOzzkFklkLqieEumNdWwJxlenqslfkap3BPp9d9_tWrQlHje053-EHa4B1GbiYw/exec"; 
 
 // --- DECOUPLED MONARCH SETTINGS ---
@@ -343,11 +343,11 @@ function buildDashboard(data, offset, now, currentRegion) {
         grid.appendChild(col);
     });
 
-    buildMonarchColumn(grid, currentRegion);
+    buildMonarchColumn(grid);
     applyVisibility(); 
 }
 
-function buildMonarchColumn(grid, currentRegion) {
+function buildMonarchColumn(grid) {
     const col = document.createElement('div');
     col.className = 'region-column';
     col.dataset.regionColumn = "Monarch";
@@ -360,34 +360,20 @@ function buildMonarchColumn(grid, currentRegion) {
         card.dataset.bossName = bossName;
         card.dataset.region = "Monarch"; 
 
-        let displayTime = "";
-        if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bossName]) {
-            displayTime = window.communityMonarchKills[currentRegion][bossName];
-        } else {
-            const localKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + currentRegion)) || {};
-            displayTime = localKills[bossName] || "";
-        }
-
-        const isLocked = displayTime !== "";
-        const lockedClass = isLocked ? "locked" : "";
-        const readonlyAttr = isLocked ? "readonly" : "";
-
+        // The input box is now permanently empty on render.
+        // The display data is handled exclusively in updateTimers.
         card.innerHTML = `
             <p class="boss-name">${bossName}</p>
             <div class="monarch-controls">
-                <span class="monarch-label">Last Announcement Time:</span>
+                <span class="monarch-label">Submit Time:</span>
                 <div class="time-input-group">
-                    <input type="text" class="monarch-time-input ${lockedClass}" data-boss="${bossName}" value="${displayTime}" placeholder="HH:MM" maxlength="5" ${readonlyAttr}>
-                    <button class="edit-time-btn" data-boss="${bossName}" title="Edit Time">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </button>
+                    <input type="text" class="monarch-time-input" data-boss="${bossName}" placeholder="HH:MM" maxlength="5">
+                    <span class="submit-msg" style="display:none;">Time submitted</span>
                 </div>
             </div>
-            <p class="time-since-kill">Time since last Announcement: <span class="kill-timer">--</span></p>
-            <div class="countdown-wrapper">
+            <p class="time-since-kill">Last Announced: <span class="avg-time">--:--</span></p>
+            <p class="time-since-kill">Time since: <span class="kill-timer">--</span></p>
+            <div class="countdown-wrapper" style="margin-top: 15px;">
                 <div class="estimated-label">ESTIMATED SPAWN IN</div>
                 <div class="countdown">--</div>
             </div>`;
@@ -396,62 +382,41 @@ function buildMonarchColumn(grid, currentRegion) {
 
     grid.appendChild(col);
 
-    // Event Listeners for the Edit Button
-    document.querySelectorAll('.edit-time-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const bName = e.currentTarget.dataset.boss;
-            const input = document.querySelector(`.monarch-time-input[data-boss="${bName}"]`);
-            if (input) {
-                input.classList.remove('locked');
-                input.removeAttribute('readonly');
-                input.focus();
-            }
-        });
-    });
-
-    // Event Listeners for the Input
     document.querySelectorAll('.monarch-time-input').forEach(input => {
-        // Blur event to re-lock if user clicks away without changing anything
-        input.addEventListener('blur', (e) => {
-            if (e.target.value.trim() !== "") {
-                e.target.classList.add('locked');
-                e.target.setAttribute('readonly', 'true');
-            }
-        });
-
-        // Change event to handle saving the time
         input.addEventListener('change', (e) => {
             const bName = e.target.dataset.boss;
             const bTime = e.target.value.trim();
             const reg = localStorage.getItem('neoTimerRegion') || 'EU';
             
-            if (bTime === "") {
-                let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
-                currentKills[bName] = "";
-                localStorage.setItem('neoMonarchKills_' + reg, JSON.stringify(currentKills));
-                e.target.classList.remove('locked');
-                e.target.removeAttribute('readonly');
-                tick(); 
-                return;
-            }
+            if (bTime === "") return;
 
             const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
             if (!timeRegex.test(bTime)) {
                 alert("Please enter a valid 24h time (e.g., 08:30 or 14:45)");
-                const currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
-                e.target.value = currentKills[bName] || "";
+                e.target.value = "";
                 return;
             }
             
-            // Re-lock the field upon valid entry
-            e.target.classList.add('locked');
-            e.target.setAttribute('readonly', 'true');
-
+            // Save locally
             let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
             currentKills[bName] = bTime;
             localStorage.setItem('neoMonarchKills_' + reg, JSON.stringify(currentKills));
             
+            // Submit
             submitMonarchTime(reg, bName, bTime);
+            
+            // UI Feedback: Hide input, show "Time submitted"
+            const group = e.target.closest('.time-input-group');
+            const msg = group.querySelector('.submit-msg');
+            e.target.style.display = 'none';
+            msg.style.display = 'inline';
+
+            // Restore input after 5 seconds
+            setTimeout(() => {
+                e.target.value = '';
+                e.target.style.display = 'inline-block';
+                msg.style.display = 'none';
+            }, 5000);
             
             tick(); 
         });
@@ -501,31 +466,34 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
     document.querySelectorAll('.monarch-card').forEach(card => {
         const countdownEl = card.querySelector('.countdown');
         const killTimerEl = card.querySelector('.kill-timer');
-        const inputEl = card.querySelector('.monarch-time-input');
+        const avgTimeEl = card.querySelector('.avg-time');
         const bName = card.dataset.bossName;
         
+        // Find Display Time (Community beats Local)
+        let displayTime = "";
         if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bName]) {
-            if (document.activeElement !== inputEl) { 
-                inputEl.value = window.communityMonarchKills[currentRegion][bName];
-                inputEl.classList.add('locked');
-                inputEl.setAttribute('readonly', 'true');
-            }
+            displayTime = window.communityMonarchKills[currentRegion][bName];
+        } else {
+            const localKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + currentRegion)) || {};
+            displayTime = localKills[bName] || "";
         }
         
-        const killTimeStr = inputEl.value;
+        // Update Static Text Label
+        avgTimeEl.innerText = displayTime !== "" ? displayTime : "--:--";
+        
         const spawnId = `Monarch_${bName}`;
         
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
 
-        if (!killTimeStr) {
+        if (!displayTime) {
             killTimerEl.innerText = "--";
             countdownEl.innerText = "Awaiting Time";
             card.dataset.priority = "3";
             return;
         }
 
-        const [kh, km] = killTimeStr.split(':').map(Number);
+        const [kh, km] = displayTime.split(':').map(Number);
         const killSec = (kh * 3600) + (km * 60);
 
         let timeSinceKill = nowSec - killSec;
