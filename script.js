@@ -1,7 +1,7 @@
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLrjzmlEvxgI8-1UNwfrJWJU7fsej4eO6dLOEEzozvd_03KmgWhAIZonrzb2QupMcvVK/pub?gid=0&single=true&output=csv";
 
 // Paste your Google Apps Script Web App URL here
-const WEB_APP_URL = "YOUR_WEB_APP_URL_HERE"; 
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzxRardOzzkFklkLqieEumNdWwJxlenqslfkap3BPp9d9_tWrQlHje053-EHa4B1GbiYw/exec"; 
 
 // --- DECOUPLED MONARCH SETTINGS ---
 const MONARCH_BOSSES = [
