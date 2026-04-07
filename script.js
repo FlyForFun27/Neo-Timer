@@ -368,11 +368,23 @@ function buildMonarchColumn(grid, currentRegion) {
             displayTime = localKills[bossName] || "";
         }
 
+        const isLocked = displayTime !== "";
+        const lockedClass = isLocked ? "locked" : "";
+        const readonlyAttr = isLocked ? "readonly" : "";
+
         card.innerHTML = `
             <p class="boss-name">${bossName}</p>
             <div class="monarch-controls">
                 <span class="monarch-label">Last Announcement Time:</span>
-                <input type="text" class="monarch-time-input" data-boss="${bossName}" value="${displayTime}" placeholder="HH:MM" maxlength="5">
+                <div class="time-input-group">
+                    <input type="text" class="monarch-time-input ${lockedClass}" data-boss="${bossName}" value="${displayTime}" placeholder="HH:MM" maxlength="5" ${readonlyAttr}>
+                    <button class="edit-time-btn" data-boss="${bossName}" title="Edit Time">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <p class="time-since-kill">Time since last Announcement: <span class="kill-timer">--</span></p>
             <div class="countdown-wrapper">
@@ -384,7 +396,30 @@ function buildMonarchColumn(grid, currentRegion) {
 
     grid.appendChild(col);
 
+    // Event Listeners for the Edit Button
+    document.querySelectorAll('.edit-time-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const bName = e.currentTarget.dataset.boss;
+            const input = document.querySelector(`.monarch-time-input[data-boss="${bName}"]`);
+            if (input) {
+                input.classList.remove('locked');
+                input.removeAttribute('readonly');
+                input.focus();
+            }
+        });
+    });
+
+    // Event Listeners for the Input
     document.querySelectorAll('.monarch-time-input').forEach(input => {
+        // Blur event to re-lock if user clicks away without changing anything
+        input.addEventListener('blur', (e) => {
+            if (e.target.value.trim() !== "") {
+                e.target.classList.add('locked');
+                e.target.setAttribute('readonly', 'true');
+            }
+        });
+
+        // Change event to handle saving the time
         input.addEventListener('change', (e) => {
             const bName = e.target.dataset.boss;
             const bTime = e.target.value.trim();
@@ -394,6 +429,8 @@ function buildMonarchColumn(grid, currentRegion) {
                 let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
                 currentKills[bName] = "";
                 localStorage.setItem('neoMonarchKills_' + reg, JSON.stringify(currentKills));
+                e.target.classList.remove('locked');
+                e.target.removeAttribute('readonly');
                 tick(); 
                 return;
             }
@@ -406,6 +443,10 @@ function buildMonarchColumn(grid, currentRegion) {
                 return;
             }
             
+            // Re-lock the field upon valid entry
+            e.target.classList.add('locked');
+            e.target.setAttribute('readonly', 'true');
+
             let currentKills = JSON.parse(localStorage.getItem('neoMonarchKills_' + reg)) || {};
             currentKills[bName] = bTime;
             localStorage.setItem('neoMonarchKills_' + reg, JSON.stringify(currentKills));
@@ -466,6 +507,8 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
         if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bName]) {
             if (document.activeElement !== inputEl) { 
                 inputEl.value = window.communityMonarchKills[currentRegion][bName];
+                inputEl.classList.add('locked');
+                inputEl.setAttribute('readonly', 'true');
             }
         }
         
