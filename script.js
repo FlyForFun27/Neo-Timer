@@ -360,8 +360,6 @@ function buildMonarchColumn(grid) {
         card.dataset.bossName = bossName;
         card.dataset.region = "Monarch"; 
 
-        // The input box is now permanently empty on render.
-        // The display data is handled exclusively in updateTimers.
         card.innerHTML = `
             <p class="boss-name">${bossName}</p>
             <div class="monarch-controls">
@@ -405,13 +403,12 @@ function buildMonarchColumn(grid) {
             // Submit
             submitMonarchTime(reg, bName, bTime);
             
-            // UI Feedback: Hide input, show "Time submitted"
+            // UI Feedback
             const group = e.target.closest('.time-input-group');
             const msg = group.querySelector('.submit-msg');
             e.target.style.display = 'none';
             msg.style.display = 'inline';
 
-            // Restore input after 5 seconds
             setTimeout(() => {
                 e.target.value = '';
                 e.target.style.display = 'inline-block';
@@ -467,9 +464,9 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
         const countdownEl = card.querySelector('.countdown');
         const killTimerEl = card.querySelector('.kill-timer');
         const avgTimeEl = card.querySelector('.avg-time');
+        const labelEl = card.querySelector('.estimated-label');
         const bName = card.dataset.bossName;
         
-        // Find Display Time (Community beats Local)
         let displayTime = "";
         if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bName]) {
             displayTime = window.communityMonarchKills[currentRegion][bName];
@@ -478,7 +475,6 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
             displayTime = localKills[bName] || "";
         }
         
-        // Update Static Text Label
         avgTimeEl.innerText = displayTime !== "" ? displayTime : "--:--";
         
         const spawnId = `Monarch_${bName}`;
@@ -488,6 +484,7 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
 
         if (!displayTime) {
             killTimerEl.innerText = "--";
+            labelEl.innerText = "ESTIMATED SPAWN IN";
             countdownEl.innerText = "Awaiting Time";
             card.dataset.priority = "3";
             return;
@@ -501,18 +498,25 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
 
         killTimerEl.innerText = formatDuration(timeSinceKill * 1000);
         
-        const spawnIn = 7200 - timeSinceKill; 
-        let timeRemaining = spawnIn;
+        let timeRemaining = 7200 - timeSinceKill;
 
-        if (spawnIn > 0) {
-            countdownEl.innerText = formatDuration(spawnIn * 1000);
+        // Phase 1: Countdown to 2h Window
+        if (timeSinceKill < 7200) {
+            labelEl.innerText = "NEXT SPAWN WINDOW IN";
+            countdownEl.innerText = formatDuration((7200 - timeSinceKill) * 1000);
             card.dataset.priority = "1";
-        } else if (timeSinceKill <= 18000) { 
-            countdownEl.innerText = `In Window`;
+        } 
+        // Phase 2: Inside the 3h Window (Countup from 2h to 5h)
+        else if (timeSinceKill < 18000) { 
+            labelEl.innerText = "IN WINDOW FOR";
+            countdownEl.innerText = formatDuration((timeSinceKill - 7200) * 1000);
             countdownEl.classList.add('spawning'); 
             card.dataset.priority = "0"; 
-        } else { 
-            countdownEl.innerText = `Missed Window`;
+        } 
+        // Phase 3: Missed the 5h cutoff
+        else { 
+            labelEl.innerText = "STATUS";
+            countdownEl.innerText = `Spawn missed`;
             card.dataset.priority = "2"; 
             timeRemaining = 999999; 
         }
