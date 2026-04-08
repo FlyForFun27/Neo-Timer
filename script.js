@@ -3,7 +3,6 @@ const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtRlBFHRViiLr
 // Connected Web App URL
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzxRardOzzkFklkLqieEumNdWwJxlenqslfkap3BPp9d9_tWrQlHje053-EHa4B1GbiYw/exec"; 
 
-// --- DECOUPLED MONARCH SETTINGS ---
 const MONARCH_BOSSES = [
     "Monarch CH 1",
     "Monarch CH 2",
@@ -16,15 +15,12 @@ window.currentDayOffset = null;
 window.notifiedBosses = new Set(); 
 window.communityMonarchKills = {}; 
 
-// The Ping Sound 
 const alertAudio = new Audio('SoundAlert.mp3');
 
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Load Theme
     const savedColor = localStorage.getItem('neoTimerThemeColor');
     if (savedColor) document.documentElement.style.setProperty('--accent-color', savedColor);
 
-    // 2. Load Volume
     const savedVolume = localStorage.getItem('neoTimerVolume');
     if (savedVolume !== null) {
         alertAudio.volume = parseFloat(savedVolume);
@@ -32,7 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
         alertAudio.volume = 0.2;
     }
 
-    // 3. Load Timer Toggle
     const timerToggle = document.getElementById('timer-toggle');
     const savedToggle = localStorage.getItem('neoTimerToggleState');
     if (timerToggle) {
@@ -43,7 +38,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // 4. Load Sound Toggle
     const soundToggle = document.getElementById('sound-toggle');
     const savedSound = localStorage.getItem('neoTimerSoundState');
     if (soundToggle) {
@@ -51,7 +45,6 @@ document.addEventListener("DOMContentLoaded", () => {
         soundToggle.addEventListener('change', (e) => localStorage.setItem('neoTimerSoundState', e.target.checked));
     }
 
-    // 5. Load Server Region
     const savedRegion = localStorage.getItem('neoTimerRegion') || 'EU';
     document.querySelectorAll('.region-btn').forEach(btn => {
         if (btn.dataset.region === savedRegion) btn.classList.add('active');
@@ -68,7 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 6. Load 12-Hour Format Toggle
     const timeFormatToggle = document.getElementById('time-format-toggle');
     const savedTimeFormat = localStorage.getItem('neoTimer12Hour');
     if (timeFormatToggle) {
@@ -82,7 +74,20 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // 7. Color Picker
+    // NEW: Load Local Time Toggle
+    const localTimeToggle = document.getElementById('local-time-toggle');
+    const savedLocalTime = localStorage.getItem('neoTimerLocalTime');
+    if (localTimeToggle) {
+        if (savedLocalTime !== null) localTimeToggle.checked = savedLocalTime === 'true';
+        localTimeToggle.addEventListener('change', (e) => {
+            localStorage.setItem('neoTimerLocalTime', e.target.checked);
+            if (window.globalCsvData) {
+                window.currentDayOffset = null; // Force UI rebuild to update strings
+                tick(); 
+            }
+        });
+    }
+
     document.querySelectorAll('.color-dot').forEach(dot => {
         dot.addEventListener('click', (e) => {
             const selectedColor = e.target.getAttribute('data-color');
@@ -91,11 +96,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 8. Setup Settings Modal & Volume Slider
     const modal = document.getElementById('settings-modal');
     const cog = document.getElementById('settings-btn');
     const closeBtn = document.querySelector('.close-modal');
-    
     const volSlider = document.getElementById('volume-slider');
     const volDisplay = document.getElementById('volume-display');
     const testBtn = document.getElementById('test-sound-btn');
@@ -103,7 +106,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (volSlider) {
         volSlider.value = alertAudio.volume;
         volDisplay.innerText = Math.round(alertAudio.volume * 100) + '%';
-        
         volSlider.addEventListener('input', (e) => {
             const newVol = parseFloat(e.target.value);
             alertAudio.volume = newVol;
@@ -129,7 +131,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target === modal) modal.style.display = 'none';
     });
 
-    // Fetch Main Data
     Papa.parse(sheetUrl, {
         download: true,
         header: true,
@@ -142,7 +143,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Fetch Community Monarch Times
     if (WEB_APP_URL !== "YOUR_WEB_APP_URL_HERE") {
         fetchCommunityMonarchs();
         setInterval(fetchCommunityMonarchs, 60000); 
@@ -168,7 +168,6 @@ function submitMonarchTime(region, boss, timeStr, isSpawn) {
     }).catch(err => console.error("Error submitting time:", err));
 }
 
-// --- SETTINGS POPULATOR (REGIONS) ---
 function populateSettings() {
     const list = document.getElementById('region-alert-list');
     if (!window.globalCsvData) return;
@@ -230,14 +229,42 @@ function applyVisibility() {
     });
 }
 
-// --- THE MASTER ENGINE ---
+function getServerOffsetHours(region) {
+    if (region === 'NA') return -6; 
+    if (region === 'TW') return 8; 
+    return 1; // EU
+}
+
+// HELPER: Converts server seconds to a displayable string, accounting for Local Time toggle
+function formatDisplayTime(targetSec, offsetHours, isLocalTime, is12Hour) {
+    if (isNaN(targetSec)) return "--:--";
+    let finalSec = targetSec;
+    
+    if (isLocalTime) {
+        let utcSec = targetSec - (offsetHours * 3600);
+        let localOffsetSec = -new Date().getTimezoneOffset() * 60; 
+        finalSec = utcSec + localOffsetSec;
+    }
+    
+    while (finalSec < 0) finalSec += 86400;
+    finalSec = finalSec % 86400;
+    
+    const h = Math.floor(finalSec / 3600);
+    const m = Math.floor((finalSec % 3600) / 60);
+    if (is12Hour) {
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        return `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+    } else {
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+}
+
 function tick() {
     if (!window.globalCsvData) return;
     
     const savedRegion = localStorage.getItem('neoTimerRegion') || 'EU';
-    let offsetHours = 1; 
-    if (savedRegion === 'NA') offsetHours = -6; 
-    else if (savedRegion === 'TW') offsetHours = 8; 
+    let offsetHours = getServerOffsetHours(savedRegion);
 
     const localNow = new Date();
     const utcMs = localNow.getTime() + (localNow.getTimezoneOffset() * 60000);
@@ -263,11 +290,16 @@ function getActiveDayOffset(data, nowSec, now) {
     return hasActiveBosses ? 0 : 1; 
 }
 
-// --- CLOCKS & RESETS ---
 function updateTopClock(now, nowSec, region) {
     const is12Hour = localStorage.getItem('neoTimer12Hour') === 'true';
-    const timeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: is12Hour });
-    document.getElementById('top-clock').innerText = `${region} | ${timeStr}`;
+    const isLocalTime = localStorage.getItem('neoTimerLocalTime') === 'true';
+    
+    // The top clock displays the region timezone by default, unless Local Time is checked
+    let displayDate = isLocalTime ? new Date() : now; 
+    let labelPrefix = isLocalTime ? "Local" : region;
+    
+    const timeStr = displayDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: is12Hour });
+    document.getElementById('top-clock').innerText = `${labelPrefix} | ${timeStr}`;
     
     let dDiff = 21600 - nowSec; 
     if (dDiff <= 0) dDiff += 86400;
@@ -285,7 +317,6 @@ function updateTopClock(now, nowSec, region) {
     }
 }
 
-// --- UI BUILDER ---
 function buildDashboard(data, offset, now, currentRegion) {
     const grid = document.getElementById('timers-grid');
     grid.innerHTML = ''; 
@@ -293,8 +324,10 @@ function buildDashboard(data, offset, now, currentRegion) {
     const targetDate = new Date(now);
     targetDate.setDate(targetDate.getDate() + offset);
     const displayDayStr = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(targetDate);
-    const isTomorrow = offset > 0;
+    
     const is12Hour = localStorage.getItem('neoTimer12Hour') === 'true';
+    const isLocalTime = localStorage.getItem('neoTimerLocalTime') === 'true';
+    const offsetHours = getServerOffsetHours(currentRegion);
 
     const displayStandardBosses = data.filter(row => row.Weekday === displayDayStr && row.Region && row.Region.toLowerCase() !== 'monarch');
     const activeRegions = [...new Set(displayStandardBosses.map(row => row.Region))];
@@ -304,8 +337,7 @@ function buildDashboard(data, offset, now, currentRegion) {
         col.className = 'region-column';
         col.dataset.regionColumn = region;
         
-        const titleExtra = isTomorrow ? ` <span style="font-size:10px; color:var(--accent-color);">(Tomorrow)</span>` : ``;
-        col.innerHTML = `<h3>${region.toUpperCase()}${titleExtra}</h3><div class="card-container"></div>`;
+        col.innerHTML = `<h3>${region.toUpperCase()}</h3><div class="card-container"></div>`;
         const container = col.querySelector('.card-container');
         
         const regionBosses = displayStandardBosses.filter(row => row.Region === region);
@@ -319,18 +351,7 @@ function buildDashboard(data, offset, now, currentRegion) {
             card.dataset.region = boss.Region; 
 
             const tSec = parseInt(boss.TargetSec, 10);
-            let displayTime = boss.TargetTime;
-            if (!isNaN(tSec)) {
-                const h = Math.floor(tSec / 3600);
-                const m = Math.floor((tSec % 3600) / 60);
-                if (is12Hour) {
-                    const ampm = h >= 12 ? 'PM' : 'AM';
-                    const h12 = h % 12 || 12;
-                    displayTime = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
-                } else {
-                    displayTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                }
-            }
+            let displayTime = formatDisplayTime(tSec, offsetHours, isLocalTime, is12Hour);
             card.dataset.displayTime = displayTime;
 
             card.innerHTML = `
@@ -351,7 +372,7 @@ function buildMonarchColumn(grid) {
     const col = document.createElement('div');
     col.className = 'region-column';
     col.dataset.regionColumn = "Monarch";
-    col.innerHTML = `<h3>MONARCHS <span style="font-size:10px; color:var(--accent-color);">(Server-Time)</span></h3><div class="card-container monarch-container"></div>`;
+    col.innerHTML = `<h3>MONARCH</h3><div class="card-container monarch-container"></div>`;
     const container = col.querySelector('.card-container');
 
     MONARCH_BOSSES.forEach(bossName => {
@@ -363,7 +384,7 @@ function buildMonarchColumn(grid) {
         card.innerHTML = `
             <p class="boss-name">${bossName}</p>
             <div class="monarch-controls" style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0;">
-                <span class="monarch-label" style="color: var(--accent-color);">SUBMIT (LOCAL TIME):</span>
+                <span class="monarch-label" style="color: var(--accent-color);">SUBMIT TIME:</span>
                 
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 11px; color: var(--text-light);">Announcement Time</span>
@@ -393,7 +414,7 @@ function buildMonarchColumn(grid) {
     document.querySelectorAll('.monarch-time-input').forEach(input => {
         input.addEventListener('change', (e) => {
             const bName = e.target.dataset.boss;
-            const bTime = e.target.value.trim();
+            let bTime = e.target.value.trim();
             const reg = localStorage.getItem('neoTimerRegion') || 'EU';
             
             if (bTime === "") return;
@@ -404,32 +425,30 @@ function buildMonarchColumn(grid) {
                 e.target.value = "";
                 return;
             }
-            
-            // --- NEW: Convert Local Time to Server Time before sending ---
-            const [localH, localM] = bTime.split(':').map(Number);
-            const localDate = new Date();
-            localDate.setHours(localH, localM, 0, 0);
-            
-            // Get UTC time of the local input
-            const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
-            
-            // Apply the currently selected server region's offset
-            let offsetHours = 1; // Default EU
-            if (reg === 'NA') offsetHours = -6; 
-            else if (reg === 'TW') offsetHours = 8; 
 
-            // Create the new server time date object
-            const serverDate = new Date(utcMs + (offsetHours * 3600000));
-            const serverH = serverDate.getHours().toString().padStart(2, '0');
-            const serverM = serverDate.getMinutes().toString().padStart(2, '0');
-            const convertedServerTimeStr = `${serverH}:${serverM}`;
-            // -------------------------------------------------------------
-
+            // TRANSLATION ENGINE: Convert Local Time submission back to Server Time before sending
+            const isLocalTime = localStorage.getItem('neoTimerLocalTime') === 'true';
+            if (isLocalTime) {
+                const parts = bTime.split(':');
+                let submitSec = (parseInt(parts[0], 10) * 3600) + (parseInt(parts[1], 10) * 60);
+                let localOffsetSec = -new Date().getTimezoneOffset() * 60;
+                let offsetHours = getServerOffsetHours(reg);
+                
+                let utcSec = submitSec - localOffsetSec;
+                submitSec = utcSec + (offsetHours * 3600);
+                
+                while (submitSec < 0) submitSec += 86400;
+                submitSec = submitSec % 86400;
+                
+                let h = Math.floor(submitSec / 3600);
+                let m = Math.floor((submitSec % 3600) / 60);
+                bTime = (h.toString().padStart(2, '0')) + ":" + (m.toString().padStart(2, '0'));
+            }
+            
             const toggle = document.querySelector(`.spawn-toggle[data-boss="${bName}"]`);
             const isSpawn = toggle ? toggle.checked : false;
 
-            // Submit the newly converted Server Time!
-            submitMonarchTime(reg, bName, convertedServerTimeStr, isSpawn);
+            submitMonarchTime(reg, bName, bTime, isSpawn);
             
             const group = e.target.closest('.time-input-group');
             const msg = group.querySelector('.submit-msg');
@@ -450,7 +469,6 @@ function buildMonarchColumn(grid) {
     });
 }
 
-// --- TIMER MATH & ALERTS ---
 function updateTimers(nowSec, activeOffset, currentRegion) {
     const timerToggle = document.getElementById('timer-toggle');
     const isTimerOn = timerToggle ? timerToggle.checked : true;
@@ -458,6 +476,10 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
     const soundToggle = document.getElementById('sound-toggle');
     const isGlobalSoundOn = soundToggle ? soundToggle.checked : false;
     const mutedRegions = JSON.parse(localStorage.getItem('neoTimerMutedRegions')) || [];
+
+    const is12Hour = localStorage.getItem('neoTimer12Hour') === 'true';
+    const isLocalTime = localStorage.getItem('neoTimerLocalTime') === 'true';
+    const offsetHours = getServerOffsetHours(currentRegion);
 
     document.querySelectorAll('.standard-card').forEach(card => {
         const countdownEl = card.querySelector('.countdown');
@@ -497,19 +519,26 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
         const labelEl = card.querySelector('.estimated-label');
         const bName = card.dataset.bossName;
         
-        let displayTime = "";
+        let rawServerTime = "";
         if (window.communityMonarchKills[currentRegion] && window.communityMonarchKills[currentRegion][bName]) {
-            displayTime = window.communityMonarchKills[currentRegion][bName];
+            rawServerTime = window.communityMonarchKills[currentRegion][bName];
         }
         
-        avgTimeEl.innerText = displayTime !== "" ? displayTime : "--:--";
+        let displayStr = "--:--";
+        if (rawServerTime !== "") {
+            const [kh, km] = rawServerTime.split(':').map(Number);
+            const targetSec = (kh * 3600) + (km * 60);
+            displayStr = formatDisplayTime(targetSec, offsetHours, isLocalTime, is12Hour);
+        }
+        
+        avgTimeEl.innerText = displayStr;
         
         const spawnId = `Monarch_${bName}`;
         
         card.classList.remove('dimmed');
         countdownEl.classList.remove('spawning');
 
-        if (!displayTime) {
+        if (!rawServerTime) {
             killTimerEl.innerText = "--";
             labelEl.innerText = "ESTIMATED SPAWN IN";
             countdownEl.innerText = "Awaiting Time";
@@ -517,8 +546,8 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
             return;
         }
 
-        const [kh, km] = displayTime.split(':').map(Number);
-        const killSec = (kh * 3600) + (km * 60);
+        const [sh, sm] = rawServerTime.split(':').map(Number);
+        const killSec = (sh * 3600) + (sm * 60);
 
         let timeSinceKill = nowSec - killSec;
         if (timeSinceKill < 0) timeSinceKill += 86400; 
