@@ -159,7 +159,6 @@ function fetchCommunityMonarchs() {
         .catch(err => console.error("Error fetching community times:", err));
 }
 
-// Updated to accept the isSpawn flag
 function submitMonarchTime(region, boss, timeStr, isSpawn) {
     if (WEB_APP_URL === "YOUR_WEB_APP_URL_HERE") return;
     
@@ -363,20 +362,21 @@ function buildMonarchColumn(grid) {
 
         card.innerHTML = `
             <p class="boss-name">${bossName}</p>
-            <div class="monarch-controls" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="monarch-label">Submit Time:</span>
-                    <div class="time-input-group">
-                        <input type="text" class="monarch-time-input" data-boss="${bossName}" placeholder="HH:MM" maxlength="5">
-                        <span class="submit-msg" style="display:none;">Submitted</span>
-                    </div>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="monarch-label" style="font-size: 9px; color: #666;">Is this a Spawn Time? (+5m)</span>
-                    <label class="switch" style="transform: scale(0.8); transform-origin: right center;">
+            <div class="monarch-controls" style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0;">
+                <span class="monarch-label" style="color: var(--accent-color);">SUBMIT TIME:</span>
+                
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 11px; color: var(--text-light);">Announcement Time</span>
+                    <label class="switch" style="transform: scale(0.7); margin: 0;">
                         <input type="checkbox" class="spawn-toggle" data-boss="${bossName}">
                         <span class="slider round"></span>
                     </label>
+                    <span style="font-size: 11px; color: var(--text-light);">Spawn Time</span>
+                    
+                    <div class="time-input-group" style="margin-left: 5px; min-height: unset;">
+                        <input type="text" class="monarch-time-input" data-boss="${bossName}" placeholder="HH:MM" maxlength="5">
+                        <span class="submit-msg" style="display:none;">Submitted</span>
+                    </div>
                 </div>
             </div>
             <p class="time-since-kill">Last Announced: <span class="avg-time">--:--</span></p>
@@ -405,28 +405,25 @@ function buildMonarchColumn(grid) {
                 return;
             }
             
-            // Grab the toggle state
             const toggle = document.querySelector(`.spawn-toggle[data-boss="${bName}"]`);
             const isSpawn = toggle ? toggle.checked : false;
 
-            // Submit to server with the new flag
             submitMonarchTime(reg, bName, bTime, isSpawn);
             
-            // UI Feedback
             const group = e.target.closest('.time-input-group');
             const msg = group.querySelector('.submit-msg');
             e.target.style.display = 'none';
-            msg.style.display = 'inline';
+            msg.style.display = 'inline-block';
+            msg.style.width = '45px'; 
+            msg.style.textAlign = 'center';
 
-            // Reset field and switch after 5 seconds
             setTimeout(() => {
                 e.target.value = '';
                 e.target.style.display = 'inline-block';
                 msg.style.display = 'none';
-                if (toggle) toggle.checked = false; // Snap back to default
+                if (toggle) toggle.checked = false; 
             }, 5000);
             
-            // Fetch fresh community times
             fetchCommunityMonarchs(); 
         });
     });
@@ -509,20 +506,17 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
         
         let timeRemaining = 7200 - timeSinceKill;
 
-        // Phase 1: Countdown to 2h Window
         if (timeSinceKill < 7200) {
             labelEl.innerText = "NEXT SPAWN WINDOW IN";
             countdownEl.innerText = formatDuration((7200 - timeSinceKill) * 1000);
             card.dataset.priority = "1";
         } 
-        // Phase 2: Inside the 3h Window (Countup from 2h to 5h)
         else if (timeSinceKill < 18000) { 
             labelEl.innerText = "IN WINDOW FOR";
             countdownEl.innerText = formatDuration((timeSinceKill - 7200) * 1000);
             countdownEl.classList.add('spawning'); 
             card.dataset.priority = "0"; 
         } 
-        // Phase 3: Missed the 5h cutoff
         else { 
             labelEl.innerText = "STATUS";
             countdownEl.innerText = `Spawn missed`;
