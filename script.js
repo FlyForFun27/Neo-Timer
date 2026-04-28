@@ -582,7 +582,8 @@ function updateTimers(nowSec, activeOffset, currentRegion) {
         handleAudio(timeRemaining, isGlobalSoundOn, mutedRegions, "Monarch", spawnId);
     });
 
-    document.querySelectorAll('.card-container').forEach(container => {
+    // THE FIX: Only sort Standard Boss containers, leave Monarchs strictly in 1, 2, 3 order!
+    document.querySelectorAll('.card-container:not(.monarch-container)').forEach(container => {
         const cards = Array.from(container.children);
         const originalOrder = [...cards];
 
